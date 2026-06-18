@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a problem with Necromancer
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please search existing issues first.
+        Reports without a debug log or the guard configuration may be closed.
+  - type: input
+    id: version
+    attributes:
+      label: Necromancer version
+      description: See the release badge, HACS, or `manifest.json`.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2025.6.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: guard
+    attributes:
+      label: Guard configuration
+      description: >
+        Health source (state-based / template-based), the chosen strategy, and the
+        current value of `sensor.<guard>_status`.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug log
+      description: |
+        Enable debug logging in `configuration.yaml`, reproduce, then paste the relevant
+        `custom_components.necromancer` lines:
+
+        ```yaml
+        logger:
+          logs:
+            custom_components.necromancer: debug
+        ```
+      render: text
+    validations:
+      required: true

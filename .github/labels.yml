@@ -1,0 +1,38 @@
+# Label names matter: Release Drafter sorts the changelog by them.
+# Synced to the repo by .github/workflows/labeler.yml.
+- name: breaking
+  description: Breaking changes
+  color: bfd4f2
+- name: enhancement
+  description: New feature or request
+  color: a2eeef
+- name: bug
+  description: Something isn't working
+  color: d73a4a
+- name: refactoring
+  description: Code refactoring
+  color: ef67c4
+- name: documentation
+  description: Improvements or additions to documentation
+  color: 0075ca
+- name: ci
+  description: Continuous integration
+  color: 4a97d6
+- name: dependencies
+  description: Updates a dependency
+  color: 0366d6
+- name: good first issue
+  description: Good for newcomers
+  color: 7057ff
+- name: help wanted
+  description: Extra attention is needed
+  color: 008672
+- name: question
+  description: Further information is requested
+  color: d876e3
+- name: wontfix
+  description: This will not be worked on
+  color: ffffff
+- name: duplicate
+  description: This issue or pull request already exists
+  color: cfd3d7

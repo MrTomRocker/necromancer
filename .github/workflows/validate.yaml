@@ -20,3 +20,15 @@ jobs:
           category: integration
           # Remove "brands" once the icon is merged into home-assistant/brands.
           ignore: brands
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repo
+        uses: actions/checkout@v6
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+      - name: Ruff check
+        run: uvx ruff check custom_components/necromancer
+      - name: Ruff format
+        run: uvx ruff format --check custom_components/necromancer
