@@ -75,7 +75,6 @@
   },
   "config_subentries": {
     "device": {
-      "title": "Monitored device",
       "entry_type": "Monitored device",
       "initiate_flow": {
         "user": "Add device",

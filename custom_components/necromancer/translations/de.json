@@ -75,7 +75,6 @@
   },
   "config_subentries": {
     "device": {
-      "title": "Überwachtes Gerät",
       "entry_type": "Überwachtes Gerät",
       "initiate_flow": {
         "user": "Gerät hinzufügen",
