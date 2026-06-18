@@ -1,6 +1,11 @@
 {
-  "title": "Necromancer",
   "config": {
+    "step": {
+      "user": {
+        "title": "Necromancer",
+        "description": "Richte den Necromancer-Hub ein. Die zu überwachenden Geräte fügst du anschließend über den Hub hinzu."
+      }
+    },
     "abort": {
       "already_configured": "Necromancer ist bereits eingerichtet."
     }

@@ -1,6 +1,11 @@
 {
-  "title": "Necromancer",
   "config": {
+    "step": {
+      "user": {
+        "title": "Necromancer",
+        "description": "Set up the Necromancer hub. Add the devices you want guarded afterwards from the hub."
+      }
+    },
     "abort": {
       "already_configured": "Necromancer is already set up."
     }
