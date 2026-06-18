@@ -1,13 +1,13 @@
 {
   "domain": "necromancer",
   "name": "Necromancer",
-  "version": "0.1.0",
-  "documentation": "https://github.com/MrTomRocker/necromancer",
-  "issue_tracker": "https://github.com/MrTomRocker/necromancer/issues",
   "codeowners": ["@MrTomRocker"],
   "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/MrTomRocker/necromancer",
   "integration_type": "service",
   "iot_class": "calculated",
-  "dependencies": [],
-  "requirements": []
+  "issue_tracker": "https://github.com/MrTomRocker/necromancer/issues",
+  "requirements": [],
+  "version": "0.1.0"
 }

@@ -115,3 +115,25 @@ DEFAULT_MAX_ATTEMPTS = 2
 DEFAULT_AUTO_RESTART = True
 DEFAULT_HEALTHY_STATE = "on"
 DEFAULT_OFF_ON_DELAY = 5
+
+# User-facing notification message templates (str.format with name/attempt/max/...).
+# Kept in code rather than strings.json because Home Assistant's translation schema
+# has no "notify" category; notify.py picks the language with an English fallback.
+NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
+    "en": {
+        "recovery_attempt": "{name}: Recovery {attempt}/{max}",
+        "recovery_success": "{name}: Recovery succeeded.",
+        "recovery_failed": "{name}: Recovery failed after {attempt} attempt(s).",
+        "recovery_blocked": "{name}: Recovery blocked — recovery action missing or not callable.",
+        "no_auto_recovery": "{name}: Problem detected, auto-recovery is disabled.",
+        "problem_detected": "{name}: Problem detected (notify only).",
+    },
+    "de": {
+        "recovery_attempt": "{name}: Reparatur {attempt}/{max}",
+        "recovery_success": "{name}: Reparatur erfolgreich.",
+        "recovery_failed": "{name}: Reparatur fehlgeschlagen nach {attempt} Versuchen.",
+        "recovery_blocked": "{name}: Reparatur blockiert — Reparatur-Aktion fehlt oder ist nicht aufrufbar.",
+        "no_auto_recovery": "{name}: Problem erkannt, Auto-Reparatur ist deaktiviert.",
+        "problem_detected": "{name}: Problem erkannt (nur Benachrichtigung).",
+    },
+}

@@ -239,7 +239,7 @@ class DeviceEngine:
     def _int(self, key: str, default: int) -> int:
         try:
             return int(self.behavior.get(key, default))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return default
 
     @property

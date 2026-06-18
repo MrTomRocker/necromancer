@@ -283,13 +283,5 @@
         "poe_port": "Auto PoE (find the port automatically)"
       }
     }
-  },
-  "notify": {
-    "recovery_attempt": "{name}: Recovery {attempt}/{max}",
-    "recovery_success": "{name}: Recovery succeeded.",
-    "recovery_failed": "{name}: Recovery failed after {attempt} attempt(s).",
-    "recovery_blocked": "{name}: Recovery blocked — recovery script missing or not callable.",
-    "no_auto_recovery": "{name}: Problem detected, auto-recovery is disabled.",
-    "problem_detected": "{name}: Problem detected (notify only)."
   }
 }

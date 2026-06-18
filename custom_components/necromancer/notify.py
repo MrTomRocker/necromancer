@@ -1,10 +1,11 @@
-"""Notification helper — resolve a translated message and run the user's action.
+"""Notification helper — resolve a message and run the user's action.
 
 Kept out of the engine so the state machine stays focused. Log lines stay
-English; the user-facing text comes from the `notify` translation section.
+English; the user-facing text comes from `NOTIFY_MESSAGES` (picked by the
+instance language, English fallback).
 
 Delivery is a user-defined action sequence (script syntax) rather than fixed
-notify entities: the user decides whether and how to notify. The localized
+notify entities: the user decides whether and how to notify. The resolved
 message and context are exposed to the sequence as the variables `message`,
 `name`, `event` (the notify key) plus any event params (attempt, max, reason).
 The sequence runs detached so a user delay never stalls the engine.
@@ -15,10 +16,9 @@ from __future__ import annotations
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import translation
 
 from .actions import async_run
-from .const import DOMAIN, LOGGER
+from .const import LOGGER, NOTIFY_MESSAGES
 
 
 async def async_notify(
@@ -28,14 +28,13 @@ async def async_notify(
     key: str,
     **params: object,
 ) -> None:
-    """Resolve `notify.<key>` for the active language and run the action sequence."""
-    translations = await translation.async_get_translations(
-        hass, hass.config.language, "notify", {DOMAIN}
-    )
-    template = translations.get(f"component.{DOMAIN}.notify.{key}", "{name}: " + key)
+    """Resolve the message for `key` in the active language and run the action."""
+    lang = (hass.config.language or "en").split("-")[0]
+    messages = NOTIFY_MESSAGES.get(lang, NOTIFY_MESSAGES["en"])
+    template = messages.get(key) or NOTIFY_MESSAGES["en"].get(key, "{name}: " + key)
     try:
         message = template.format(name=name, **params)
-    except KeyError, IndexError:
+    except (KeyError, IndexError):
         message = f"{name}: {key}"
     LOGGER.debug("Notify %s: %s", name, message)
 
