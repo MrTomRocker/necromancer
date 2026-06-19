@@ -2,29 +2,35 @@ name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 categories:
   - title: "💥 Breaking changes"
-    labels: ["breaking"]
+    semver-increment: "major"
+    when:
+      labels: ["breaking"]
   - title: "🚀 Features"
-    labels: ["enhancement"]
+    semver-increment: "minor"
+    when:
+      labels: ["enhancement"]
   - title: "🐛 Fixes"
-    labels: ["bug"]
+    semver-increment: "patch"
+    when:
+      labels: ["bug"]
   - title: "🚜 Refactoring"
-    labels: ["refactoring"]
+    semver-increment: "patch"
+    when:
+      labels: ["refactoring"]
   - title: "📝 Documentation"
-    labels: ["documentation"]
+    semver-increment: "patch"
+    when:
+      labels: ["documentation"]
   - title: "🏗️ Continuous integration"
-    labels: ["ci"]
+    semver-increment: "patch"
+    when:
+      labels: ["ci"]
   - title: "📦 Dependencies"
-    labels: ["dependencies"]
+    semver-increment: "patch"
+    when:
+      labels: ["dependencies"]
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 change-title-escapes: '\<*_&'
-version-resolver:
-  major:
-    labels: ["breaking"]
-  minor:
-    labels: ["enhancement"]
-  patch:
-    labels: ["bug", "ci", "documentation", "dependencies", "refactoring"]
-  default: patch
 autolabeler:
   - label: "breaking"
     title: ["/!:/", "/^[a-z]+(\\(.+\\))?!:/i"]
