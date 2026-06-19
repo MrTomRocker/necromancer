@@ -9,6 +9,7 @@ the result is verified against the device's health entity is the engine's job.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 from homeassistant.core import HomeAssistant
 
@@ -19,9 +20,29 @@ class RecoveryDriver(ABC):
     def __init__(self, hass: HomeAssistant, config: dict) -> None:
         self.hass = hass
         self.config = config
+        # Optional persistent cache, wired by the engine via `bind_cache`: lets a
+        # driver remember a resolved target across restarts. Only `poe_port` uses
+        # it (last-known port, so a device that has aged out of the switch's
+        # neighbour table while down can still be recovered).
+        self._cache_get: Callable[[], str | None] | None = None
+        self._cache_set: Callable[[str | None], None] | None = None
 
-    async def resolve(self) -> None:  # noqa: B027
-        """Optional: refresh internal mapping (e.g. poe_port MAC->port)."""
+    def bind_cache(
+        self,
+        get: Callable[[], str | None],
+        set_: Callable[[str | None], None],
+    ) -> None:
+        """Wire a persistent get/set for the driver's resolved target."""
+        self._cache_get = get
+        self._cache_set = set_
+
+    def observe(self) -> None:  # noqa: B027
+        """Optional: learn the current target while the device is healthy.
+
+        Called by the engine on every healthy evaluation; a driver that resolves
+        its target dynamically (poe_port) refreshes its cache here so a fallback
+        is available later when live resolution fails.
+        """
 
     async def can_recover(self) -> tuple[bool, str]:
         """Guard right before recovering. Returns (allowed, reason)."""

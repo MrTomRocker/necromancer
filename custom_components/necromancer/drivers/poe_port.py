@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import asyncio
 
-from homeassistant.core import Event, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import (
@@ -53,6 +53,11 @@ def _norm(value: str | None) -> str | None:
 class PoePortDriver(RecoveryDriver):
     """Resolve `expected_id` to a port in the flat port list, then cycle it."""
 
+    def __init__(self, hass: HomeAssistant, config: dict) -> None:
+        super().__init__(hass, config)
+        # Port chosen by can_recover, reused by recover (resolve once per cycle).
+        self._selected: dict | None = None
+
     @property
     def expected_id(self) -> str:
         return self.config[CONF_EXPECTED_ID]
@@ -75,28 +80,70 @@ class PoePortDriver(RecoveryDriver):
         value = state.state if not attribute else state.attributes.get(attribute)
         return None if value is None else str(value)
 
-    def _matches(self) -> list[dict]:
+    def _live_matches(self) -> list[dict]:
+        """Ports whose currently-reported id equals the expected id."""
         target = _norm(self.expected_id)
         return [port for port in self.ports if _norm(self._port_id(port)) == target]
 
-    async def can_recover(self) -> tuple[bool, str]:
-        matches = self._matches()
-        if not matches:
-            LOGGER.error("PoE %s: no matching port in the list", self.expected_id)
-            return False, f"no port matches '{self.expected_id}'"
+    def _port_by_label(self, label: str | None) -> dict | None:
+        if not label:
+            return None
+        return next((p for p in self.ports if p.get(CONF_LABEL) == label), None)
+
+    def _remember(self, label: str | None) -> None:
+        if label and self._cache_set is not None:
+            self._cache_set(label)
+
+    def observe(self) -> None:
+        """While healthy: cache the single port the device currently sits on.
+
+        This is what makes the fallback possible — once a device goes down it may
+        age out of the switch's neighbour table, so its port must be learned while
+        it is still visible.
+        """
+        matches = self._live_matches()
+        if len(matches) == 1:
+            self._remember(matches[0].get(CONF_LABEL))
+
+    def _select(self) -> tuple[dict | None, str]:
+        """Pick the port to cycle.
+
+        A single live match wins (and refreshes the cache); on *no* live match we
+        fall back to the last-known cached port (the device aged out while down);
+        an ambiguous (>1) live match blocks — a config issue, never guess.
+        """
+        matches = self._live_matches()
+        if len(matches) == 1:
+            self._remember(matches[0].get(CONF_LABEL))
+            return matches[0], ""
         if len(matches) > 1:
-            LOGGER.error(
-                "PoE %s: %s ports match (ambiguous)", self.expected_id, len(matches)
+            return None, f"'{self.expected_id}' matches {len(matches)} ports"
+        cached = self._cache_get() if self._cache_get is not None else None
+        port = self._port_by_label(cached)
+        if port is not None:
+            LOGGER.warning(
+                "PoE %s: not visible in any port's neighbour data — falling back "
+                "to last-known port '%s'",
+                self.expected_id,
+                cached,
             )
-            return False, f"'{self.expected_id}' matches {len(matches)} ports"
+            return port, ""
+        return None, f"no port matches '{self.expected_id}'"
+
+    async def can_recover(self) -> tuple[bool, str]:
+        port, reason = self._select()
+        self._selected = port
+        if port is None:
+            LOGGER.error("PoE %s: %s", self.expected_id, reason)
+            return False, reason
         return True, ""
 
     async def recover(self) -> None:
-        matches = self._matches()
-        if len(matches) != 1:
+        port = self._selected or self._select()[0]
+        self._selected = None
+        if port is None:
             LOGGER.error("PoE %s: cannot resolve a single port", self.expected_id)
             return
-        port = matches[0]
         actuator = port[CONF_ACTUATOR]
         delay = int(port.get(CONF_OFF_ON_DELAY, DEFAULT_OFF_ON_DELAY))
 
@@ -176,9 +223,13 @@ class PoePortDriver(RecoveryDriver):
             unsub()
 
     def target_info(self) -> str:
-        matches = self._matches()
+        matches = self._live_matches()
         if len(matches) == 1:
             return f"{matches[0].get(CONF_LABEL, '?')} → {matches[0][CONF_ACTUATOR]}"
+        cached = self._cache_get() if self._cache_get is not None else None
+        port = self._port_by_label(cached)
+        if not matches and port is not None:
+            return f"{cached} → {port[CONF_ACTUATOR]} (last-known)"
         return f"id={self.expected_id} ({len(self.ports)} port(s) in scope)"
 
     def config_errors(self) -> list[str]:
