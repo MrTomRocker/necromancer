@@ -169,8 +169,46 @@ long to wait for the device to recover, and how many times to retry before escal
 defaults are sensible; tune them per device.
 
 **PoE ports** (only needed for the Auto-PoE strategy) are managed as a flat list under Necromancer's
-**Configure** (options). Each port carries a recognizable id, a status entity, the actuator
-switch to cycle, and its own timing.
+**Configure** (options). Each port carries a status entity (is the port up?), the actuator switch that
+powers it, its own timing — and an **id** that lets a guard find *which* port belongs to its device.
+
+### Identifying the right port — fixed vs. dynamic
+
+A PoE guard has a **Device id (e.g. MAC, IP or name)** field; Necromancer power-cycles the one port
+whose id matches it. You wire this up in one of two ways, depending on whether your switch can report
+what's plugged into each port.
+
+#### Fixed / statically assigned ports
+
+Use this when the switch *can't* tell you what's connected — an unmanaged switch, or one with no
+LLDP/neighbour data (e.g. a TP-Link SG108E). You pin the mapping by hand:
+
+- On the **port**, leave *“Entity with the connected device”* empty and put a label in
+  *“Or a fixed value (if there's no entity)”* — e.g. `hue-bridge`.
+- On the **PoE guard**, set **Device id** to the same value: `hue-bridge`.
+
+The match never changes — but it is *physical*: if you re-patch the device to another port, update the
+fixed value yourself.
+
+#### Dynamic / auto-discovery
+
+Use this when the switch reports each port's neighbour (MAC, IP or hostname via LLDP/FDB/SNMP — e.g. a
+managed switch surfaced through Node-RED). Necromancer resolves the port at runtime, so moving a device
+between ports just works:
+
+- On the **port**, set *“Entity with the connected device”* to that port's neighbour sensor (e.g.
+  `sensor.poe_switch_port_1_neighbours`) and *“Attribute of that entity”* to the field that carries the
+  id (e.g. `mac` or `ip`; leave empty to use the entity's state).
+- On the **PoE guard**, set **Device id** to your device's value — for example:
+  - by **MAC**: `b0:1f:81:b0:f4:84`
+  - by **IP**: `192.168.1.42`
+
+Necromancer scans every port, finds the one currently reporting that MAC/IP, cycles it, and waits for
+the device to report healthy again. Re-patch the device to a different port and it still finds it.
+
+> Ids are matched trimmed and case-insensitive (`B0:1F:81:…` matches `b0:1f:81:…`). **Exactly one** port
+> must match: zero or several blocks recovery (it's logged and the guard goes to `escalated`), so
+> nothing random ever gets power-cycled.
 
 ### Notifications
 
