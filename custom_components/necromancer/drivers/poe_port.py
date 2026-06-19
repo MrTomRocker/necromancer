@@ -81,10 +81,28 @@ class PoePortDriver(RecoveryDriver):
         value = state.state if not attribute else state.attributes.get(attribute)
         return None if value is None else str(value)
 
-    def _live_matches(self) -> list[dict]:
-        """Ports whose currently-reported id equals the expected id."""
+    def _live_matches(self, *, trace: bool = False) -> list[dict]:
+        """Ports whose currently-reported id equals the expected id.
+
+        With ``trace`` each port's reported id and match verdict is logged at
+        DEBUG, so a recovery's port resolution is fully traceable.
+        """
         target = _norm(self.expected_id)
-        return [port for port in self.ports if _norm(self._port_id(port)) == target]
+        matches: list[dict] = []
+        for port in self.ports:
+            pid = self._port_id(port)
+            hit = _norm(pid) == target
+            if trace:
+                LOGGER.debug(
+                    "PoE %s:   port %r reports id %r%s",
+                    self.expected_id,
+                    port.get(CONF_LABEL),
+                    pid,
+                    "  <- MATCH" if hit else "",
+                )
+            if hit:
+                matches.append(port)
+        return matches
 
     def _port_by_label(self, label: str | None) -> dict | None:
         if not label:
@@ -92,8 +110,17 @@ class PoePortDriver(RecoveryDriver):
         return next((p for p in self.ports if p.get(CONF_LABEL) == label), None)
 
     def _remember(self, label: str | None) -> None:
-        if label and self._cache_set is not None:
-            self._cache_set(label)
+        if not label or self._cache_set is None:
+            return
+        current = self._cache_get() if self._cache_get is not None else None
+        if label != current:
+            LOGGER.debug(
+                "PoE %s: saving resolved port %r to persistence (was %r)",
+                self.expected_id,
+                label,
+                current,
+            )
+        self._cache_set(label)
 
     def observe(self) -> None:
         """While healthy: cache the single port the device currently sits on.
@@ -121,6 +148,11 @@ class PoePortDriver(RecoveryDriver):
         ]
         if not entities:
             return None
+        LOGGER.debug(
+            "PoE %s: watching %d id-entity(ies) to keep the cached port fresh",
+            self.expected_id,
+            len(entities),
+        )
 
         @callback
         def _changed(_event: Event) -> None:
@@ -135,22 +167,38 @@ class PoePortDriver(RecoveryDriver):
         fall back to the last-known cached port (the device aged out while down);
         an ambiguous (>1) live match blocks — a config issue, never guess.
         """
-        matches = self._live_matches()
+        LOGGER.debug(
+            "PoE %s: resolving among %d configured port(s)",
+            self.expected_id,
+            len(self.ports),
+        )
+        matches = self._live_matches(trace=True)
         if len(matches) == 1:
-            self._remember(matches[0].get(CONF_LABEL))
+            label = matches[0].get(CONF_LABEL)
+            LOGGER.debug("PoE %s: resolved live to port %r", self.expected_id, label)
+            self._remember(label)
             return matches[0], ""
         if len(matches) > 1:
+            LOGGER.debug(
+                "PoE %s: %d ports match — ambiguous, refusing to guess",
+                self.expected_id,
+                len(matches),
+            )
             return None, f"'{self.expected_id}' matches {len(matches)} ports"
         cached = self._cache_get() if self._cache_get is not None else None
         port = self._port_by_label(cached)
         if port is not None:
             LOGGER.warning(
                 "PoE %s: not visible in any port's neighbour data — falling back "
-                "to last-known port '%s'",
+                "to last-known port '%s' (from persistence)",
                 self.expected_id,
                 cached,
             )
             return port, ""
+        LOGGER.debug(
+            "PoE %s: no live match and no cached port — cannot resolve",
+            self.expected_id,
+        )
         return None, f"no port matches '{self.expected_id}'"
 
     async def can_recover(self) -> tuple[bool, str]:

@@ -126,6 +126,11 @@ class DeviceEngine:
             self.auto = bool(data["auto"])
         if data.get("resolved_port"):
             self.resolved_port = data["resolved_port"]
+            LOGGER.debug(
+                "%s: restored resolved_port %r from Store",
+                self.name,
+                self.resolved_port,
+            )
         if data.get("state") == GState.ESCALATED.value:
             self.state = GState.ESCALATED
             self.attempt = int(data.get("attempt", 0) or 0)
@@ -279,6 +284,12 @@ class DeviceEngine:
     def _set_resolved_port(self, label: str | None) -> None:
         """Driver callback: persist the last-known resolved target on change."""
         if label != self.resolved_port:
+            LOGGER.debug(
+                "%s: persisting resolved_port %r (was %r)",
+                self.name,
+                label,
+                self.resolved_port,
+            )
             self.resolved_port = label
             self._save()
 

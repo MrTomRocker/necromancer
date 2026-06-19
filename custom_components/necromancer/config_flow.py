@@ -1056,8 +1056,12 @@ def _ports_to_yaml(ports: list[dict]) -> str:
     )
 
 
-def _import_schema(mode: str, text: str) -> vol.Schema:
-    """Merge/replace mode + a multiline YAML paste field."""
+def _import_schema(mode: str, value: object = None) -> vol.Schema:
+    """Merge/replace mode + a YAML editor (ObjectSelector) for the port list.
+
+    ObjectSelector renders HA's YAML code editor (top-aligned, monospace) instead
+    of a multiline text field — and hands back the already-parsed list.
+    """
     return vol.Schema(
         {
             vol.Required(CONF_IMPORT_MODE, default=mode): selector.SelectSelector(
@@ -1068,10 +1072,21 @@ def _import_schema(mode: str, text: str) -> vol.Schema:
                 )
             ),
             vol.Required(
-                CONF_PORTS_YAML, description={"suggested_value": text or None}
-            ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+                CONF_PORTS_YAML, description={"suggested_value": value}
+            ): selector.ObjectSelector(),
         }
     )
+
+
+def _coerce_ports(raw: object) -> list[dict]:
+    """Accept a parsed list (ObjectSelector) or a YAML string; validate each port."""
+    if raw is None or raw == "":
+        raise ValueError("no ports given")
+    if isinstance(raw, str):
+        return _parse_ports_yaml(raw)
+    if isinstance(raw, list):
+        return [_normalize_imported_port(port) for port in raw]
+    raise ValueError("expected a list of ports")
 
 
 def _export_select_schema(ports: list[dict]) -> vol.Schema:
@@ -1182,14 +1197,14 @@ class NecromancerOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
-        text = ""
+        value: object = None
         mode = IMPORT_MODE_MERGE
         detail = ""
         if user_input is not None:
-            text = user_input.get(CONF_PORTS_YAML, "") or ""
+            value = user_input.get(CONF_PORTS_YAML)
             mode = user_input.get(CONF_IMPORT_MODE, IMPORT_MODE_MERGE)
             try:
-                imported = _parse_ports_yaml(text)
+                imported = _coerce_ports(value)
             except ValueError as err:
                 errors["base"] = "import_failed"
                 detail = str(err)
@@ -1201,7 +1216,7 @@ class NecromancerOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
         return self.async_show_form(
             step_id="import_ports",
-            data_schema=_import_schema(mode, text),
+            data_schema=_import_schema(mode, value),
             errors=errors,
             description_placeholders={"error": detail},
         )
