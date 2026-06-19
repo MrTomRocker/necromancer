@@ -4,10 +4,10 @@
   "codeowners": ["@MrTomRocker"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/MrTomRocker/necromancer",
+  "documentation": "https://github.com/MrTomRocker/homeassistant-necromancer",
   "integration_type": "service",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/MrTomRocker/necromancer/issues",
+  "issue_tracker": "https://github.com/MrTomRocker/homeassistant-necromancer/issues",
   "requirements": [],
   "version": "0.1.0"
 }

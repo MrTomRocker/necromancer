@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or discussion
-    url: https://github.com/MrTomRocker/necromancer/discussions
+    url: https://github.com/MrTomRocker/homeassistant-necromancer/discussions
     about: Ask questions and discuss ideas here (enable Discussions in repo settings).

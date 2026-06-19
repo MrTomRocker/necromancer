@@ -1,12 +1,12 @@
 # Necromancer
 
-[![GitHub release](https://img.shields.io/github/release/MrTomRocker/necromancer?include_prereleases=&sort=semver&color=blue)](https://github.com/MrTomRocker/necromancer/releases/)
+[![GitHub release](https://img.shields.io/github/release/MrTomRocker/homeassistant-necromancer?include_prereleases=&sort=semver&color=blue)](https://github.com/MrTomRocker/homeassistant-necromancer/releases/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](#license)
-[![issues](https://img.shields.io/github/issues/MrTomRocker/necromancer)](https://github.com/MrTomRocker/necromancer/issues)
+[![issues](https://img.shields.io/github/issues/MrTomRocker/homeassistant-necromancer)](https://github.com/MrTomRocker/homeassistant-necromancer/issues)
 ![HACS](https://img.shields.io/badge/HACS-none-inactive)
 
 <div align="center">
-  <img width="70%" alt="Necromancer guards overview" src="https://raw.githubusercontent.com/MrTomRocker/necromancer/main/img/overview.png">
+  <img width="70%" alt="Necromancer guards overview" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/overview.png">
 </div>
 
 **Necromancer is a generic self-healing framework for Home Assistant.** It watches your
@@ -57,7 +57,7 @@ Battery-Notes link pattern):
 | `button.<guard>_recover` | Trigger a recovery cycle manually. |
 
 <div align="center">
-  <img width="320px" alt="Necromancer guard entities" src="https://raw.githubusercontent.com/MrTomRocker/necromancer/main/img/guard_entities.png">
+  <img width="320px" alt="Necromancer guard entities" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/guard_entities.png">
 </div>
 
 ## Health sources
@@ -124,7 +124,7 @@ Necromancer is **not in the HACS default store yet**, so add it as a custom repo
 
 1. Open **HACS** in Home Assistant.
 2. Click the `⋮` menu in the top right and choose **Custom repositories**.
-3. Add the URL `https://github.com/MrTomRocker/necromancer` and set the category to **Integration**.
+3. Add the URL `https://github.com/MrTomRocker/homeassistant-necromancer` and set the category to **Integration**.
 4. Search for **Necromancer** in HACS and click **Download**.
 5. Restart Home Assistant.
 6. Add the integration via **Settings → Devices & Services**.
@@ -133,7 +133,7 @@ Necromancer is **not in the HACS default store yet**, so add it as a custom repo
 
 You can also use this shortcut once the repository is known to HACS:
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MrTomRocker&repository=necromancer&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MrTomRocker&repository=homeassistant-necromancer&category=integration)
 
 <details>
 <summary>Manual installation</summary>
@@ -157,7 +157,7 @@ device* for each thing you want watched.
    **health source → device & check → strategy → recovery/notification**.
 
 <div align="center">
-  <img width="480px" alt="Add a guarded device" src="https://raw.githubusercontent.com/MrTomRocker/necromancer/main/img/add_device.png">
+  <img width="480px" alt="Add a guarded device" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/add_device.png">
 </div>
 
 Along the way you also set the **timing** — how long a problem must persist before reacting, how
