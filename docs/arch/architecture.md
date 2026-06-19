@@ -335,3 +335,6 @@ health entity changes
               └─ timeout → attempt<max ? retry : ESCALATED
   (every transition persists to the Store; notify action runs per event)
 ```
+
+> For every timer, the full per-state timing, the PoE/link timelines and an
+> exhaustive case catalogue, see **[timing.md](timing.md)**.

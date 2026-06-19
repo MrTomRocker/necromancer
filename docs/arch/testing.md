@@ -3,6 +3,9 @@
 Three levels, smallest-first. The manual regression checklist proves end-to-end
 behaviour today; pure logic should move into `pytest` over time.
 
+> The exhaustive list of cases each test guards — with their timing — lives in
+> **[timing.md](timing.md)** (§6 case catalogue). This file says *how* to test them.
+
 ---
 
 ## 1. Invariants to protect
