@@ -247,6 +247,16 @@ pin it with a fixed id (see *Identifying the right port* below).
 `unknown`, not `unavailable`, so a template checking `unavailable` won't fire. Simulate a real
 outage instead (cut power, unplug), or override the state — don't disable the entity.
 
+**Where's the option to link guards?** The *Linked guards* section only appears once there's
+another recover guard to link to — so your very first guard has nothing to offer there. Add the
+second guard, then link them from either guard's **Reconfigure**.
+
+**When should I pick a "with health-check" strategy?** Whenever the recovery can fail *silently* —
+for example Auto-PoE/`repair_poe_port` with an id that might not resolve, or an action whose effect
+you can't otherwise confirm. The health-check variants only declare success once the device reports
+healthy again; the plain (fire-and-forget) variants assume the action worked and rely on continuous
+monitoring to re-trigger if it didn't, which can mean one premature "recovered" notification.
+
 ## Installation
 
 ### HACS (Home Assistant Community Store)

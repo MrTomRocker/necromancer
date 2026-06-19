@@ -37,8 +37,10 @@ from .const import (
     DEFAULT_COOLDOWN,
     DEFAULT_DEBOUNCE,
     DEFAULT_MAX_ATTEMPTS,
+    DOMAIN,
     EVENT_GUARD_REPAIR,
     LOGGER,
+    REASON_OBSERVE,
 )
 from .drivers import RecoveryDriver
 from .health import Health, HealthSource
@@ -186,6 +188,23 @@ class DeviceEngine:
                 )
         for err in self.driver.config_errors():
             LOGGER.error("%s: %s", self.name, err)
+        # Feedback-loop guard: a (template) health that depends on this guard's own
+        # entities would re-evaluate on its own state changes. State health can't
+        # (the picker excludes our entities) but a free-text template can.
+        if self._subentry_id:
+            own = {
+                e.entity_id
+                for e in ent_reg.entities.values()
+                if e.platform == DOMAIN and e.unique_id.startswith(self._subentry_id)
+            }
+            loop = own.intersection(self.health.referenced_entities())
+            if loop:
+                LOGGER.warning(
+                    "%s: health references its own entit(ies) %s — feedback loop; "
+                    "point health at the guarded device, not the guard",
+                    self.name,
+                    sorted(loop),
+                )
 
     async def async_stop(self) -> None:
         LOGGER.debug("Stopping engine for %s", self.name)
@@ -448,7 +467,7 @@ class DeviceEngine:
             return
         allowed, reason = self.policy.should_attempt(auto_enabled=self.auto)
         if not allowed:
-            if reason == "observe":
+            if reason == REASON_OBSERVE:
                 LOGGER.info("%s problem detected (notify-only)", self.name)
                 self.hass.async_create_task(self._notify("problem_detected"))
             else:

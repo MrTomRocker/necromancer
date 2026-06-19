@@ -801,6 +801,19 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     def _reconfig_data(self) -> dict:
         return self._get_reconfigure_subentry().data
 
+    def _name_taken(self, name: str) -> bool:
+        """True if another guard already uses this name (case/space-insensitive)."""
+        wanted = (name or "").strip().casefold()
+        if not wanted:
+            return False
+        own = self._get_reconfigure_subentry().subentry_id if self._reconfig else None
+        return any(
+            sid != own and (se.data.get(CONF_NAME) or se.title or "").strip().casefold()
+            == wanted
+            for sid, se in self._get_entry().subentries.items()
+            if se.subentry_type == SUBENTRY_TYPE_DEVICE
+        )
+
     # ---------- guard linking ----------
     def _recover_guards(self) -> dict[str, dict]:
         """All recover-mode device subentries by id (notify guards can't link)."""
@@ -874,6 +887,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             did = user_input.get(CONF_DEVICE_ID)
             if did and self._is_own_device(did):
                 errors[CONF_DEVICE_ID] = "no_self_link"
+            elif self._name_taken(user_input.get(CONF_NAME, "")):
+                # Distinct names keep entity_ids (sensor.<name>_status) unambiguous.
+                errors[CONF_NAME] = "duplicate_name"
             else:
                 user_input[CONF_SOURCE_TYPE] = self._source_type
                 self._step1 = user_input

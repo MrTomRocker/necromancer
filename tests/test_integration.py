@@ -180,8 +180,26 @@ async def test_poe_bogus_id_blocks_no_blind(hass, cap):
     await eng.async_stop()
 
 
+async def test_health_self_reference_warns(hass, cap):
+    # a template health that reads the guard's OWN status entity -> feedback loop
+    reg = er.async_get(hass)
+    e = reg.async_get_or_create("sensor", DOMAIN, "g_status",
+                                suggested_object_id="g_status")
+    h = create_health(hass, {"type": "template",
+                             "template": f"{{{{ is_state('{e.entity_id}', 'ok') }}}}"})
+    eng = DeviceEngine(hass, "G", h, _Noop(hass), StandardPolicy({}), {"debounce": 2},
+                       subentry_id="g", engines={})
+    await eng.async_start()
+    cap.clear()
+    eng._check_config(hass)  # the startup config check
+    await hass.async_block_till_done()
+    ok("health:self_reference_warns", "feedback loop" in cap.text(), cap.text()[-200:])
+    await eng.async_stop()
+
+
 TESTS = [test_health_disable_logs_blind, test_health_rename_follows,
-         test_health_remove_logs, test_poe_bogus_id_blocks_no_blind]
+         test_health_remove_logs, test_poe_bogus_id_blocks_no_blind,
+         test_health_self_reference_warns]
 
 
 async def main():

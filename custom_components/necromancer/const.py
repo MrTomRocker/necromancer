@@ -30,6 +30,12 @@ CONF_MODE = "mode"
 MODE_RECOVER = "recover"
 MODE_NOTIFY = "notify"
 
+# Policy gate verdicts (returned by RecoveryPolicy.should_attempt, branched on by
+# the engine): observe = notify-only "problem detected"; auto_off = the per-guard
+# auto-recovery switch is off.
+REASON_OBSERVE = "observe"
+REASON_AUTO_OFF = "auto_off"
+
 # device (optional link to an existing HA device)
 CONF_DEVICE_ID = "device_id"
 

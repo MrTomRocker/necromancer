@@ -46,6 +46,14 @@ class HealthSource(ABC):
     def evaluate(self) -> Health:
         """Return the current health verdict."""
 
+    def referenced_entities(self) -> list[str]:
+        """Entities the verdict depends on (for self-reference / loop checks).
+
+        Defaults to `watched_entities`; a source that tracks something else (a
+        template) overrides this with its real dependency set.
+        """
+        return list(self.watched_entities)
+
     async def async_setup(
         self, on_change: Callable[[], None]
     ) -> Callable[[], None] | None:

@@ -113,7 +113,8 @@
         "reconfigure": "Reconfigure device"
       },
       "error": {
-        "no_self_link": "Necromancer's own devices can't be linked. Pick a different device."
+        "no_self_link": "Necromancer's own devices can't be linked. Pick a different device.",
+        "duplicate_name": "A guard with this name already exists. Pick a unique name so the status entities stay unambiguous."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration successful."
@@ -153,7 +154,7 @@
             },
             "template_check": {
               "name": "State template",
-              "description": "A Jinja template that returns true (OK) or false (faulty) — e.g. a comparison like CPU below 90, or is_state(...). It's re-checked when referenced entities change. An empty/unknown result or a render error counts as unknown (no false alarm).",
+              "description": "A Jinja template that returns true (OK) or false (faulty) — e.g. a comparison like CPU below 90, or is_state(...). It's re-checked when referenced entities change. An empty/unknown result or a render error counts as unknown (no false alarm). Point it at the guarded device — don't reference this guard's own status/health entities, or you create a feedback loop.",
               "data": {
                 "template": "Template"
               }

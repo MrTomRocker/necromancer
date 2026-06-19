@@ -113,7 +113,8 @@
         "reconfigure": "Gerät neu konfigurieren"
       },
       "error": {
-        "no_self_link": "Necromancer-eigene Geräte können nicht verknüpft werden. Wähle ein anderes Gerät."
+        "no_self_link": "Necromancer-eigene Geräte können nicht verknüpft werden. Wähle ein anderes Gerät.",
+        "duplicate_name": "Ein Guard mit diesem Namen existiert bereits. Wähle einen eindeutigen Namen, damit die Status-Entitäten eindeutig bleiben."
       },
       "abort": {
         "reconfigure_successful": "Neukonfiguration erfolgreich."
@@ -153,7 +154,7 @@
             },
             "template_check": {
               "name": "Zustands-Template",
-              "description": "Ein Jinja-Template, das true (in Ordnung) oder false (gestört) ergibt – z. B. ein Vergleich wie „CPU < 90“ oder is_state(...). Es wird neu geprüft, sobald sich referenzierte Entitäten ändern. Ein leeres/unbekanntes Ergebnis oder ein Render-Fehler gilt als unbekannt (kein Fehlalarm).",
+              "description": "Ein Jinja-Template, das true (in Ordnung) oder false (gestört) ergibt – z. B. ein Vergleich wie „CPU < 90“ oder is_state(...). Es wird neu geprüft, sobald sich referenzierte Entitäten ändern. Ein leeres/unbekanntes Ergebnis oder ein Render-Fehler gilt als unbekannt (kein Fehlalarm). Richte es auf das überwachte Gerät – referenziere nicht die eigenen Status-/Health-Entitäten dieses Guards, sonst entsteht eine Rückkopplungsschleife.",
               "data": {
                 "template": "Template"
               }

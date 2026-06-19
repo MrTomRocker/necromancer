@@ -250,6 +250,23 @@ async def test_links_closure(hass, _):
     assert comp["A"] == comp["B"] == comp["C"] == {"A", "B", "C"}
 
 
+async def test_policy_reasons(hass, _):
+    from custom_components.necromancer.const import REASON_AUTO_OFF, REASON_OBSERVE
+    from custom_components.necromancer.policies.notify import NotifyPolicy
+    from custom_components.necromancer.policies.standard import StandardPolicy
+
+    assert StandardPolicy({}).should_attempt(auto_enabled=True) == (True, "")
+    assert StandardPolicy({}).should_attempt(auto_enabled=False) == (False, REASON_AUTO_OFF)
+    assert NotifyPolicy({}).should_attempt(auto_enabled=True) == (False, REASON_OBSERVE)
+    assert REASON_AUTO_OFF == "auto_off"  # english, no more "auto_aus"
+
+
+async def test_template_referenced_entities(hass, _):
+    h = create_health(hass, {"type": "template",
+                             "template": "{{ is_state('sensor.foo', 'on') }}"})
+    assert "sensor.foo" in h.referenced_entities(), h.referenced_entities()
+
+
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 

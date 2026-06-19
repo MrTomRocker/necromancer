@@ -6,6 +6,7 @@ engine routes a confirmed problem straight to ESCALATED (with a notification).
 
 from __future__ import annotations
 
+from ..const import REASON_OBSERVE
 from .base import RecoveryPolicy
 
 
@@ -15,4 +16,4 @@ class NotifyPolicy(RecoveryPolicy):
     allows_recovery = False
 
     def should_attempt(self, *, auto_enabled: bool) -> tuple[bool, str]:
-        return False, "observe"
+        return False, REASON_OBSERVE
