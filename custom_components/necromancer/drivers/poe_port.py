@@ -19,6 +19,7 @@ injected into the driver config at setup (see __init__).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -104,6 +105,28 @@ class PoePortDriver(RecoveryDriver):
         matches = self._live_matches()
         if len(matches) == 1:
             self._remember(matches[0].get(CONF_LABEL))
+
+    async def async_setup(self) -> Callable[[], None] | None:
+        """Refresh the cache whenever a port's id-entity changes.
+
+        The switch's neighbour table updates independently of the device's health
+        entity, so observing only on health events would miss the window where the
+        device is resolvable. Watch every dynamic port's id-entity and re-learn.
+        """
+        self.observe()
+        entities = [
+            p[CONF_ID_ENTITY]
+            for p in self.ports
+            if p.get(CONF_ID_ENTITY) and not p.get(CONF_ID_STATIC)
+        ]
+        if not entities:
+            return None
+
+        @callback
+        def _changed(_event: Event) -> None:
+            self.observe()
+
+        return async_track_state_change_event(self.hass, entities, _changed)
 
     def _select(self) -> tuple[dict | None, str]:
         """Pick the port to cycle.

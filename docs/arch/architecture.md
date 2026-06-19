@@ -167,13 +167,16 @@ device health-check.
 
 **Auto-PoE remembers its port.** A device that is down can age out of the
 switch's FDB/LLDP neighbour table, so resolving it live would find *nothing*
-exactly when recovery is needed. The engine therefore calls `driver.observe()`
-on every healthy evaluation; `poe_port` records the resolved port (by label) in
-the per-guard `Store` (`resolved_port`). At recovery time a single live match
+exactly when recovery is needed. It is learned two ways: the engine calls
+`driver.observe()` on every healthy evaluation, **and** the driver watches its
+port id-entities (`async_setup`) so it caches the moment the neighbour table
+reports the device — not only on a health event. `poe_port` records the resolved
+port (by label) in the per-guard `Store` (`resolved_port`). At recovery time a single live match
 still wins (and refreshes the cache); on **zero** live matches it falls back to
 that last-known port (logged at WARNING); an **ambiguous** (>1) match still
 blocks. The cache is wired generically — `RecoveryDriver.bind_cache(get, set)` +
-`observe()` — so the engine owns persistence and only `poe_port` uses it.
+`observe()` + `async_setup()` — so the engine owns persistence and only
+`poe_port` uses it.
 
 ---
 

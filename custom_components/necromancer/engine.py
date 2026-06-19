@@ -101,6 +101,7 @@ class DeviceEngine:
         self._unsub_registry: Callable[[], None] | None = None
         self._unsub_started: Callable[[], None] | None = None
         self._unsub_source: Callable[[], None] | None = None
+        self._unsub_driver: Callable[[], None] | None = None
         self._unsub_timer: Callable[[], None] | None = None
         self._verify_event: asyncio.Event | None = None
         self._cycle_task: asyncio.Task | None = None
@@ -161,6 +162,9 @@ class DeviceEngine:
         # Sources that track something else (e.g. a template) register here and
         # call _evaluate on change; state sources use watched_entities above.
         self._unsub_source = await self.health.async_setup(self._evaluate)
+        # The driver may watch its own inputs (poe_port: the port id-entities, so
+        # it caches the resolved port the moment the neighbour table reports it).
+        self._unsub_driver = await self.driver.async_setup()
         self._evaluate()
 
     @callback
@@ -194,6 +198,9 @@ class DeviceEngine:
         if self._unsub_source:
             self._unsub_source()
             self._unsub_source = None
+        if self._unsub_driver:
+            self._unsub_driver()
+            self._unsub_driver = None
         self._cancel_timer()
         if self._cycle_task and not self._cycle_task.done():
             self._cycle_task.cancel()

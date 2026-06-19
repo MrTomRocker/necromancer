@@ -44,6 +44,16 @@ class RecoveryDriver(ABC):
         is available later when live resolution fails.
         """
 
+    async def async_setup(self) -> Callable[[], None] | None:
+        """Optional: start watching what affects resolution; return an unsub.
+
+        `poe_port` uses this to refresh its cached port whenever a port's
+        id-entity changes — the switch's neighbour table updates independently of
+        the device's health entity, so observing only on health events would miss
+        it. Default: nothing to watch.
+        """
+        return None
+
     async def can_recover(self) -> tuple[bool, str]:
         """Guard right before recovering. Returns (allowed, reason)."""
         return True, ""
