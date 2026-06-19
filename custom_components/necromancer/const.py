@@ -81,6 +81,13 @@ CONF_STATUS_OFF = "status_off"
 DEFAULT_PORT_OFF_TIMEOUT = 20
 DEFAULT_PORT_ON_TIMEOUT = 60
 
+# options flow: import/export the flat port list as YAML (bulk-edit escape hatch)
+CONF_IMPORT_MODE = "import_mode"
+IMPORT_MODE_MERGE = "merge"
+IMPORT_MODE_REPLACE = "replace"
+CONF_PORTS_YAML = "ports_yaml"
+CONF_PORT_SELECTION = "selection"
+
 # driver (switch_cycle): power-cycle a switch (off → delay → on)
 CONF_SWITCH_ENTITY = "switch_entity"
 CONF_OFF_ON_DELAY = "off_on_delay"

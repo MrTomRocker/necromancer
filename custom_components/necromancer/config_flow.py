@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
+import yaml
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -57,6 +58,7 @@ from .const import (
     CONF_ID_ATTRIBUTE,
     CONF_ID_ENTITY,
     CONF_ID_STATIC,
+    CONF_IMPORT_MODE,
     CONF_LABEL,
     CONF_MAX_ATTEMPTS,
     CONF_MODE,
@@ -69,7 +71,9 @@ from .const import (
     CONF_ON_TIMEOUT,
     CONF_ON_VALUE,
     CONF_POLICY,
+    CONF_PORT_SELECTION,
     CONF_PORTS,
+    CONF_PORTS_YAML,
     CONF_SOURCE,
     CONF_SOURCE_TYPE,
     CONF_STATUS_ATTRIBUTE,
@@ -88,6 +92,8 @@ from .const import (
     DEFAULT_PORT_OFF_TIMEOUT,
     DEFAULT_PORT_ON_TIMEOUT,
     DOMAIN,
+    IMPORT_MODE_MERGE,
+    IMPORT_MODE_REPLACE,
     LOGGER,
     MODE_NOTIFY,
     MODE_RECOVER,
@@ -947,6 +953,157 @@ def _port_select_schema(ports: list[dict]) -> vol.Schema:
     )
 
 
+# --- port import / export (YAML bulk-edit escape hatch) ---
+
+# Field order for clean, round-trippable YAML export.
+_PORT_EXPORT_KEYS = (
+    CONF_LABEL,
+    CONF_ACTUATOR,
+    CONF_ID_ENTITY,
+    CONF_ID_ATTRIBUTE,
+    CONF_ID_STATIC,
+    CONF_STATUS_ENTITY,
+    CONF_STATUS_ATTRIBUTE,
+    CONF_STATUS_ON,
+    CONF_STATUS_OFF,
+    CONF_OFF_ON_DELAY,
+    CONF_OFF_TIMEOUT,
+    CONF_ON_TIMEOUT,
+)
+
+
+def _yaml_value(value: object) -> object:
+    """YAML 1.1 reads on/off/yes/no as booleans; map those back to on/off."""
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    return value
+
+
+def _str_values(raw: object) -> list[str]:
+    """Normalise a status value (scalar or list) to a list of strings."""
+    return [str(_yaml_value(v)).strip() for v in _as_list(raw)]
+
+
+def _normalize_imported_port(raw: object) -> dict:
+    """Validate one imported port and return it in the stored shape.
+
+    Raises ValueError with a user-facing reason on a missing/invalid field.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError("each entry must be a port mapping")
+    label = str(raw.get(CONF_LABEL, "")).strip()
+    if not label:
+        raise ValueError("a port is missing 'label'")
+    actuator = str(raw.get(CONF_ACTUATOR, "")).strip()
+    if not actuator:
+        raise ValueError(f"port '{label}' is missing 'actuator'")
+    status_entity = str(raw.get(CONF_STATUS_ENTITY, "")).strip()
+    if not status_entity:
+        raise ValueError(f"port '{label}' is missing 'status_entity'")
+    try:
+        timing = {
+            CONF_OFF_ON_DELAY: float(raw.get(CONF_OFF_ON_DELAY, DEFAULT_OFF_ON_DELAY)),
+            CONF_OFF_TIMEOUT: float(
+                raw.get(CONF_OFF_TIMEOUT, DEFAULT_PORT_OFF_TIMEOUT)
+            ),
+            CONF_ON_TIMEOUT: float(raw.get(CONF_ON_TIMEOUT, DEFAULT_PORT_ON_TIMEOUT)),
+        }
+    except (TypeError, ValueError) as err:
+        raise ValueError(f"port '{label}' has a non-numeric timing value") from err
+    port: dict = {
+        CONF_LABEL: label,
+        CONF_ACTUATOR: actuator,
+        CONF_STATUS_ENTITY: status_entity,
+        CONF_STATUS_ON: _str_values(raw.get(CONF_STATUS_ON)) or ["on"],
+        CONF_STATUS_OFF: _str_values(raw.get(CONF_STATUS_OFF)) or ["off"],
+        **timing,
+    }
+    for key in (
+        CONF_ID_ENTITY,
+        CONF_ID_ATTRIBUTE,
+        CONF_ID_STATIC,
+        CONF_STATUS_ATTRIBUTE,
+    ):
+        value = raw.get(key)
+        if value not in (None, ""):
+            port[key] = str(_yaml_value(value)).strip()
+    return port
+
+
+def _parse_ports_yaml(text: str) -> list[dict]:
+    """Parse and validate pasted YAML into a clean port list (raises ValueError)."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as err:
+        raise ValueError(f"not valid YAML ({err.__class__.__name__})") from err
+    if data is None:
+        raise ValueError("no ports given")
+    if not isinstance(data, list):
+        raise ValueError("expected a list of ports")
+    return [_normalize_imported_port(port) for port in data]
+
+
+def _ports_to_yaml(ports: list[dict]) -> str:
+    """Dump ports to clean, round-trippable YAML (ordered keys, on/off quoted)."""
+    export = [
+        {key: port[key] for key in _PORT_EXPORT_KEYS if port.get(key) not in (None, "")}
+        for port in ports
+    ]
+    return yaml.safe_dump(
+        export, sort_keys=False, allow_unicode=True, default_flow_style=False
+    )
+
+
+def _import_schema(mode: str, text: str) -> vol.Schema:
+    """Merge/replace mode + a multiline YAML paste field."""
+    return vol.Schema(
+        {
+            vol.Required(CONF_IMPORT_MODE, default=mode): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[IMPORT_MODE_MERGE, IMPORT_MODE_REPLACE],
+                    mode=selector.SelectSelectorMode.LIST,
+                    translation_key="import_mode",
+                )
+            ),
+            vol.Required(
+                CONF_PORTS_YAML, description={"suggested_value": text or None}
+            ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+        }
+    )
+
+
+def _export_select_schema(ports: list[dict]) -> vol.Schema:
+    """Multi-select of which ports to export (all pre-selected)."""
+    options = [
+        {"value": str(i), "label": p.get(CONF_LABEL) or f"Port {i + 1}"}
+        for i, p in enumerate(ports)
+    ]
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_PORT_SELECTION, default=[o["value"] for o in options]
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options,
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            )
+        }
+    )
+
+
+def _export_result_schema(text: str) -> vol.Schema:
+    """Display the exported YAML in a copyable multiline field."""
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_PORTS_YAML, description={"suggested_value": text}
+            ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+        }
+    )
+
+
 class NecromancerOptionsFlow(OptionsFlow):
     """Manage the flat list of PoE ports shared by every poe_port guard.
 
@@ -962,6 +1119,7 @@ class NecromancerOptionsFlow(OptionsFlow):
         self._loaded = False
         self._edit_index = 0
         self._editing = False
+        self._export_text = ""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -972,6 +1130,9 @@ class NecromancerOptionsFlow(OptionsFlow):
         options = ["add_port"]
         if self._ports:
             options += ["edit_port", "delete_port"]
+        options.append("import_ports")
+        if self._ports:
+            options.append("export_ports")
         options.append("save")
         port_list = (
             "\n".join(
@@ -1024,6 +1185,70 @@ class NecromancerOptionsFlow(OptionsFlow):
             return await self.async_step_init()
         return self.async_show_form(
             step_id="delete_port", data_schema=_port_select_schema(self._ports)
+        )
+
+    async def async_step_import_ports(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        text = ""
+        mode = IMPORT_MODE_MERGE
+        detail = ""
+        if user_input is not None:
+            text = user_input.get(CONF_PORTS_YAML, "") or ""
+            mode = user_input.get(CONF_IMPORT_MODE, IMPORT_MODE_MERGE)
+            try:
+                imported = _parse_ports_yaml(text)
+            except ValueError as err:
+                errors["base"] = "import_failed"
+                detail = str(err)
+            else:
+                if mode == IMPORT_MODE_REPLACE:
+                    self._ports = imported
+                else:
+                    self._merge_ports(imported)
+                return await self.async_step_init()
+        return self.async_show_form(
+            step_id="import_ports",
+            data_schema=_import_schema(mode, text),
+            errors=errors,
+            description_placeholders={"error": detail},
+        )
+
+    def _merge_ports(self, imported: list[dict]) -> None:
+        """Upsert imported ports into the current list, keyed by label."""
+        index_by_label = {p[CONF_LABEL]: i for i, p in enumerate(self._ports)}
+        for port in imported:
+            existing = index_by_label.get(port[CONF_LABEL])
+            if existing is not None:
+                self._ports[existing] = port
+            else:
+                index_by_label[port[CONF_LABEL]] = len(self._ports)
+                self._ports.append(port)
+
+    async def async_step_export_ports(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            chosen: list[dict] = []
+            for raw in user_input.get(CONF_PORT_SELECTION, []):
+                index = int(raw)
+                if 0 <= index < len(self._ports):
+                    chosen.append(self._ports[index])
+            self._export_text = _ports_to_yaml(chosen) if chosen else ""
+            return await self.async_step_export_result()
+        return self.async_show_form(
+            step_id="export_ports", data_schema=_export_select_schema(self._ports)
+        )
+
+    async def async_step_export_result(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="export_result",
+            data_schema=_export_result_schema(self._export_text),
         )
 
     async def async_step_save(

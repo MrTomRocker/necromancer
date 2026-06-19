@@ -18,18 +18,24 @@
           "add_port": "Add port",
           "edit_port": "Edit port",
           "delete_port": "Delete port",
+          "import_ports": "Import ports",
+          "export_ports": "Export ports",
           "save": "Save"
         }
       },
       "add_port": {
         "title": "PoE port",
         "description": "A PoE port: how it's switched, how the connected device is recognised, how its online status is checked, and its timing.",
-        "data": { "label": "Port name" },
+        "data": {
+          "label": "Port name"
+        },
         "sections": {
           "power": {
             "name": "Power switch",
             "description": "Switch that cuts power (PoE) on the port (e.g. a smart plug or PoE switch).",
-            "data": { "actuator": "switch / input_boolean" }
+            "data": {
+              "actuator": "switch / input_boolean"
+            }
           },
           "identity": {
             "name": "Recognition",
@@ -64,13 +70,42 @@
       "edit_port": {
         "title": "Which port to edit?",
         "description": "Pick the port you want to edit.",
-        "data": { "port": "Port" }
+        "data": {
+          "port": "Port"
+        }
       },
       "delete_port": {
         "title": "Which port to delete?",
         "description": "Pick the port you want to remove.",
-        "data": { "port": "Port" }
+        "data": {
+          "port": "Port"
+        }
+      },
+      "import_ports": {
+        "title": "Import ports",
+        "description": "Paste a list of ports as YAML. “Merge” adds new ports and updates existing ones with the same name; “Replace” overwrites the whole list. Tip: export first to see the exact format.",
+        "data": {
+          "import_mode": "Mode",
+          "ports_yaml": "Ports (YAML)"
+        }
+      },
+      "export_ports": {
+        "title": "Export ports",
+        "description": "Choose which ports to export — all are selected by default.",
+        "data": {
+          "selection": "Ports"
+        }
+      },
+      "export_result": {
+        "title": "Exported ports",
+        "description": "Copy the YAML below. You can edit it and paste it back via Import.",
+        "data": {
+          "ports_yaml": "Ports (YAML)"
+        }
       }
+    },
+    "error": {
+      "import_failed": "Import failed: {error}"
     }
   },
   "config_subentries": {
@@ -90,17 +125,24 @@
         "user": {
           "title": "State source",
           "description": "How should Necromancer tell whether the device is OK — from an entity's state, or from a Jinja template?",
-          "data": { "source_type": "Source type" }
+          "data": {
+            "source_type": "Source type"
+          }
         },
         "reconfigure": {
           "title": "State source",
           "description": "How should Necromancer tell whether the device is OK — from an entity's state, or from a Jinja template?",
-          "data": { "source_type": "Source type" }
+          "data": {
+            "source_type": "Source type"
+          }
         },
         "device": {
           "title": "Device & state",
           "description": "Give the device a name and define how its state is detected and what happens on a problem.",
-          "data": { "name": "Name", "mode": "Mode" },
+          "data": {
+            "name": "Name",
+            "mode": "Mode"
+          },
           "sections": {
             "state_check": {
               "name": "State check",
@@ -115,7 +157,9 @@
             "template_check": {
               "name": "State template",
               "description": "A Jinja template that returns true (OK) or false (faulty) — e.g. a comparison like CPU below 90, or is_state(...). It's re-checked when referenced entities change. An empty/unknown result or a render error counts as unknown (no false alarm).",
-              "data": { "template": "Template" }
+              "data": {
+                "template": "Template"
+              }
             },
             "assigned_device": {
               "name": "Assigned device (optional)",
@@ -126,7 +170,9 @@
         "strategy": {
           "title": "Recovery strategy",
           "description": "How should the device be brought back when it fails? \"With health-check\" waits for the device to report OK again afterwards; the plain variants assume the action worked.",
-          "data": { "strategy": "Strategy" }
+          "data": {
+            "strategy": "Strategy"
+          }
         },
         "switch": {
           "title": "Power-cycle a switch",
@@ -149,14 +195,18 @@
             "notification": {
               "name": "Notification",
               "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "data": {
+                "notify_action": "Action"
+              }
             }
           }
         },
         "action": {
           "title": "Run an action",
           "description": "Runs your action when the device fails. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry.",
-          "data": { "action": "Action (e.g. a script, service, SSH, webhook)" },
+          "data": {
+            "action": "Action (e.g. a script, service, SSH, webhook)"
+          },
           "sections": {
             "behavior": {
               "name": "Behaviour",
@@ -171,7 +221,9 @@
             "notification": {
               "name": "Notification",
               "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "data": {
+                "notify_action": "Action"
+              }
             }
           }
         },
@@ -197,14 +249,18 @@
             "notification": {
               "name": "Notification",
               "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "data": {
+                "notify_action": "Action"
+              }
             }
           }
         },
         "poe_port": {
           "title": "Auto PoE — find the port",
           "description": "Finds the matching PoE port by the device's id and powers it off and on. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry. Manage the ports under the integration's \"Configure\".",
-          "data": { "expected_id": "Device id (e.g. MAC, IP or name)" },
+          "data": {
+            "expected_id": "Device id (e.g. MAC, IP or name)"
+          },
           "sections": {
             "behavior": {
               "name": "Behaviour",
@@ -219,19 +275,25 @@
             "notification": {
               "name": "Notification",
               "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "data": {
+                "notify_action": "Action"
+              }
             }
           }
         },
         "notify": {
           "title": "Notification",
           "description": "What should happen when a problem is detected.",
-          "data": { "debounce": "Wait before reacting" },
+          "data": {
+            "debounce": "Wait before reacting"
+          },
           "sections": {
             "notification": {
               "name": "Notification",
               "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "data": {
+                "notify_action": "Action"
+              }
             }
           }
         }
@@ -253,13 +315,19 @@
       }
     },
     "binary_sensor": {
-      "health": { "name": "Health" }
+      "health": {
+        "name": "Health"
+      }
     },
     "switch": {
-      "auto_restart": { "name": "Auto-recovery" }
+      "auto_restart": {
+        "name": "Auto-recovery"
+      }
     },
     "button": {
-      "recover": { "name": "Revive" }
+      "recover": {
+        "name": "Revive"
+      }
     }
   },
   "selector": {
@@ -284,6 +352,12 @@
         "actions": "Off/on actions",
         "actions_check": "Off/on actions + health-check",
         "poe_port": "Auto PoE (find the port automatically)"
+      }
+    },
+    "import_mode": {
+      "options": {
+        "merge": "Merge (add new, update existing)",
+        "replace": "Replace (overwrite all)"
       }
     }
   }
