@@ -82,8 +82,15 @@ Drive the real flows and the engine:
   other logs "linked guard is repairing — following", holds (no own action), and
   re-validates after → both end OK and the follower also enters cooldown. Closure:
   a one-sided link still shows the partner on *both* guards' next edit; unlinking
-  from one side clears the edge on both. Arbitration: if both trip, the one whose
-  debounce elapses first leads, the other follows (no double-cycle).
+  from one side clears the edge on both; a notify-only guard never appears in a
+  group. Corner cases (all covered by a standalone engine probe):
+  - **Arbitration**: simultaneous debounce → the leader claims `RECOVERING`
+    synchronously in `_start_cycle`, so the other follows (no double-cycle).
+  - **Auto-off**: a follower with its `auto` switch off does **not** follow — if its
+    device is affected it escalates (`no_auto_recovery`). Off means off.
+  - **Leader failed**: leader escalates and the follower is still unhealthy → the
+    follower escalates (`linked_repair_failed`), it does **not** self-recover and
+    re-trigger the group (no cascade).
 - **`repair_poe_port` service**: a call resolves the id and cycles the port
   (status `recovering`→`good`); a second concurrent call waits on the per-port lock
   instead of double-cycling. Verified live end-to-end via a real PoE-bridge outage

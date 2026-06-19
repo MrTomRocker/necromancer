@@ -205,18 +205,31 @@ follow — e.g. a *ping* guard and a *lamps-unavailable* guard on the same Hue b
   **undirected + clique-closed**: `links.py` (`link_components`) builds connected
   components over the union of all declarations, so a one-sided link still reads and
   behaves as a full mutual group. The config flow reads the closure for the form
-  default; `__init__` reads it to give each engine its effective partners. Unlinking
-  clears the edge on **both** sides (`_apply_link_removals`), so the only way out of a
-  group is to clear *all* its partners (a single shared partner re-forms the clique).
+  default; `__init__` reads it to give each engine its effective partners. Only
+  **recover** guards take part — both the flow's options *and* the setup closure
+  exclude notify-only guards, so a guard reconfigured to notify-only drops out of
+  every group (no inert ghost member). Unlinking clears the edge on **both** sides
+  (`_apply_link_removals`), so the only way out of a group is to clear *all* its
+  partners (a single shared partner re-forms the clique).
 - **Coordination.** When a guard starts recovery it fires `_notify_partners_start`
   (a direct call to each partner engine **and** a `necromancer_guard_repair` bus event
   for outside automations). A partner that isn't already busy enters a **follow hold**
   (RECOVERING, no own action) and suppresses its own health-driven transitions. When
-  the leader finishes (`_notify_partners_done`), each follower re-validates: healthy →
-  it settles through the **same `_recover_success` path** (cooldown + stats) as the
-  leader; still unhealthy → it falls back to its own recovery. Arbitration is
-  first-come — a guard whose debounce elapses while a partner is already repairing
-  follows instead of launching a competing cycle.
+  the leader finishes (`_notify_partners_done`), each follower re-validates:
+  - healthy → it settles through the **same `_recover_success` path** (cooldown +
+    stats) as the leader, instead of snapping back to OK;
+  - still unhealthy **and the leader succeeded** → only the follower's device is
+    still down, so it falls back to its own recovery;
+  - still unhealthy **and the leader failed** → the shared cause is unfixed, so the
+    follower **escalates** (`linked_repair_failed`) rather than self-recovering and
+    re-triggering the group (no cascade).
+- **Arbitration is first-come.** A guard claims the leader role *synchronously* in
+  `_start_cycle` (sets `RECOVERING` before the cycle task runs), so a linked partner
+  whose debounce elapses in the same tick already sees it as repairing and follows —
+  no double-cycle even on simultaneous trips.
+- **Auto-off means off.** A guard whose `auto` switch is disabled never participates
+  in a group repair: instead of following, if its own device is affected it
+  **escalates** (`no_auto_recovery`). It is never silently fixed by a partner.
 
 ---
 

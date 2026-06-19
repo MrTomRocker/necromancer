@@ -35,6 +35,7 @@ from .const import (
     CONF_TYPE,
     DOMAIN,
     LOGGER,
+    MODE_NOTIFY,
     PLATFORMS,
     SAVE_DELAY,
     SERVICE_REPAIR_POE_PORT,
@@ -141,16 +142,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
         )
 
     # Guard linking: resolve each guard's group (clique-closed) from the declared
-    # links across all device subentries, so partners coordinate at runtime.
-    device_ids = {
-        sid
-        for sid, se in entry.subentries.items()
-        if se.subentry_type == SUBENTRY_TYPE_DEVICE
-    }
+    # links. Only **recover** guards can link (matching the config flow's options),
+    # so notify-only guards are excluded from the closure — a guard reconfigured to
+    # notify-only therefore drops out of every group instead of lingering inertly.
+    def _is_recover(se) -> bool:
+        return (
+            se.subentry_type == SUBENTRY_TYPE_DEVICE
+            and se.data.get(CONF_POLICY, {}).get(CONF_TYPE) != MODE_NOTIFY
+        )
+
+    device_ids = {sid for sid, se in entry.subentries.items() if _is_recover(se)}
     declared_links = {
         sid: set(se.data.get(CONF_LINKED_GUARDS, []) or [])
         for sid, se in entry.subentries.items()
-        if se.subentry_type == SUBENTRY_TYPE_DEVICE
+        if _is_recover(se)
     }
     groups = link_components(declared_links, device_ids)
 

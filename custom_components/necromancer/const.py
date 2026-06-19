@@ -148,6 +148,7 @@ NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
         "recovery_blocked": "{name}: Recovery blocked — recovery action missing or not callable.",  # noqa: E501
         "no_auto_recovery": "{name}: Problem detected, auto-recovery is disabled.",
         "problem_detected": "{name}: Problem detected (notify only).",
+        "linked_repair_failed": "{name}: Linked repair failed — still faulty.",
     },
     "de": {
         "recovery_attempt": "{name}: Reparatur {attempt}/{max}",
@@ -156,5 +157,7 @@ NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
         "recovery_blocked": "{name}: Reparatur blockiert — Reparatur-Aktion fehlt oder ist nicht aufrufbar.",  # noqa: E501
         "no_auto_recovery": "{name}: Problem erkannt, Auto-Reparatur ist deaktiviert.",
         "problem_detected": "{name}: Problem erkannt (nur Benachrichtigung).",
+        # linked_repair_failed: a follower escalates when the group repair failed.
+        "linked_repair_failed": "{name}: Reparatur über verknüpften Guard fehlgeschlagen.",  # noqa: E501
     },
 }

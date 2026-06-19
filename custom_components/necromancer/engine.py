@@ -357,8 +357,29 @@ class DeviceEngine:
             partner._on_partner_repair_done(self._subentry_id, success)
 
     def _on_partner_repair_start(self, leader_id: str) -> None:
-        """A linked guard started repairing: hold instead of competing."""
+        """A linked guard started repairing.
+
+        Normally we *follow* (hold, then re-verify) instead of launching a competing
+        recovery. But auto-recovery off means off: a guard with its auto switch
+        disabled never participates in a group repair — if its own device is actually
+        affected it escalates (alarm) rather than silently following someone else's
+        fix.
+        """
         if not self.allows_recovery or self._busy() or self._following:
+            return
+        if not self.auto:
+            if self.health.evaluate() == Health.UNHEALTHY and self.state != (
+                GState.ESCALATED
+            ):
+                LOGGER.warning(
+                    "%s: linked guard repairing but auto-recovery is off — escalating",
+                    self.name,
+                )
+                self._cancel_timer()
+                self._set_state(GState.ESCALATED)
+                self.hass.async_create_task(
+                    self._notify("no_auto_recovery", reason="auto_off")
+                )
             return
         LOGGER.info(
             "%s: linked guard is repairing — following (hold, verify after)", self.name
@@ -369,33 +390,43 @@ class DeviceEngine:
         self._set_state(GState.RECOVERING)
 
     def _on_partner_repair_done(self, leader_id: str, success: bool) -> None:
-        """Our leader finished: re-validate; self-recover only if still unhealthy."""
+        """Our leader finished — re-validate; the verdict steers the fallback."""
         if not self._following or self._leader != leader_id:
             return
         self._following = False
         self._leader = None
         if self._busy():
             return
-        self.hass.async_create_task(self._validate_after_repair())
+        self.hass.async_create_task(self._validate_after_repair(leader_success=success))
 
-    async def _validate_after_repair(self) -> None:
+    async def _validate_after_repair(self, *, leader_success: bool) -> None:
         """Re-check health after a group repair.
 
-        On success the follower's device was effectively recovered (by the shared
-        fix), so it settles through the same success path as the leader — COOLDOWN
-        + stats + success notification — instead of snapping straight back to OK.
-        Only if it is still unhealthy does it fall back to its own recovery.
+        - Healthy → the follower's device was recovered by the shared fix, so it
+          settles through the same success path as the leader (COOLDOWN + stats),
+          instead of snapping straight back to OK.
+        - Still unhealthy, leader **succeeded** → only *our* device is still down, so
+          fall back to our own recovery.
+        - Still unhealthy, leader **failed** → the shared cause is unfixed; don't
+          cascade into a competing recovery (which would just re-trigger the group) —
+          follow the leader's escalation instead.
         """
         self._set_state(GState.VERIFY)
         if await self._wait_health_ok(self._int(CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW)):
             LOGGER.info("%s: healthy after linked-guard repair", self.name)
             self._recover_success()
-        else:
+        elif leader_success:
             LOGGER.info(
                 "%s: still unhealthy after linked repair — own recovery", self.name
             )
             self._set_state(GState.OK)
             self._evaluate()
+        else:
+            LOGGER.warning(
+                "%s: linked repair failed and still unhealthy — escalating", self.name
+            )
+            self._set_state(GState.ESCALATED)
+            self.hass.async_create_task(self._notify("linked_repair_failed"))
 
     # ---------- health handling ----------
     @callback
@@ -478,6 +509,10 @@ class DeviceEngine:
     def _start_cycle(self) -> None:
         if self._cycle_task and not self._cycle_task.done():
             return
+        # Claim the leader role *synchronously* (before the cycle task runs) so a
+        # linked partner whose debounce elapses in the same tick already sees us as
+        # RECOVERING and follows, instead of both starting a competing recovery.
+        self._set_state(GState.RECOVERING)
         self._cycle_task = self.hass.async_create_task(self._run_recovery_cycle())
 
     async def async_manual_recover(self) -> None:
