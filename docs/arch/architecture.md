@@ -41,7 +41,7 @@ once, blank). Everything else hangs off it:
 |---|---|
 | **Service** | One config entry (`data` blank). |
 | **Guarded device** | A config **subentry** of type `device` (one per watched device). Added via *“Add device”*, edited via its *Reconfigure* button. |
-| **PoE ports** | A flat list in the service entry’s **options** (`entry.options["ports"]`), managed via the **options flow**. |
+| **PoE ports** | A flat list in the service entry’s **options** (`entry.options["ports"]`), managed via the **options flow** (add / edit / delete a port, plus **YAML import / export** for bulk edits). |
 
 One `DeviceEngine` is built per `device` subentry and lives in
 `entry.runtime_data` keyed by `subentry_id`. Adding/changing a subentry reloads
@@ -204,6 +204,16 @@ Steps for a recover guard: **source type → device & state → strategy → rec
   (`exclude_entities`) so a guard can’t watch or switch its own status entities.
 - **Auto-recovery is not a setup field.** It is the per-guard runtime switch
   entity (Store-persisted); guards start with it on.
+- **Options flow (ports).** A button menu (`async_show_menu`) over the flat port
+  list: add / edit / delete a port (edit reuses the `add_port` step), plus
+  **import / export** for bulk edits. *Export* multi-selects ports (all
+  pre-selected) and dumps them to YAML; *import* parses pasted YAML and either
+  **merges** (upsert by `label`) or **replaces** the list — every port is
+  validated (`_parse_ports_yaml` → `_normalize_imported_port`) and nothing is
+  applied on error (the reason is surfaced via `description_placeholders`). YAML
+  round-trips cleanly: `_ports_to_yaml` quotes on/off values and import coerces
+  YAML 1.1 booleans (`on`/`off`/`yes`) back to strings, so the bool footgun can’t
+  corrupt a status list.
 - **Translations.** `strings.json` is the source; `translations/en.json` is an
   exact copy; `translations/de.json` mirrors it. HA renders config translations
   via **ICU MessageFormat**, so descriptions must contain **no `{…}` braces**

@@ -40,6 +40,7 @@ invariant):
 | `health/template.py` | `result_as_boolean` cases (`true/false/on/off/1/0/'banana'/42`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. |
 | `drivers/*.can_recover` | missing switch / missing+ambiguous port / invalid+empty action → `(False, reason)`. |
 | `config_flow` helpers | `_flatten_sections` (nested→flat), `_as_list`, `_watch_config`/`_watch_defaults`, `_build_data` (health block per source type, behaviour per check), `_current_strategy`, `_source_type_of`. |
+| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / malformed YAML / non-numeric timing. `_ports_to_yaml` round-trips; on/off survive both ways (export quotes, import coerces YAML-1.1 booleans). Import **merge** = upsert by `label`, **replace** = overwrite; invalid import leaves the list untouched. |
 | `actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. |
 
 ## 3. Level 2 — integration (HA test harness or dev container)

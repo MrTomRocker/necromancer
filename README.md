@@ -210,6 +210,35 @@ the device to report healthy again. Re-patch the device to a different port and 
 > must match: zero or several blocks recovery (it's logged and the guard goes to `escalated`), so
 > nothing random ever gets power-cycled.
 
+#### Import / export the port list (YAML)
+
+Clicking through the per-port form gets old fast once you have a switch full of ports. Under
+Necromancer's **Configure** you can also **Export** and **Import** the whole list as YAML:
+
+- **Export** — pick which ports (all are pre-selected) and copy the YAML. It's also a handy backup or
+  something to keep in version control.
+- **Import** — paste a list and choose **Merge** (add new ports, update existing ones with the same
+  name) or **Replace** (overwrite the whole list). Every port is validated first; on any error nothing
+  is changed and the reason is shown.
+
+```yaml
+- label: Switch klein Port 5
+  actuator: switch.poe_switch_klein_port_5_poe
+  id_entity: sensor.poe_switch_klein_port_5_neighbours
+  id_attribute: mac
+  status_entity: binary_sensor.poe_switch_klein_port_5_up
+  status_on: ['on']
+  status_off: ['off']
+  off_on_delay: 5
+  off_timeout: 40
+  on_timeout: 90
+```
+
+Only `label`, `actuator` and `status_entity` are required; identity (`id_entity`/`id_attribute` or
+`id_static`) and timings are optional and fall back to the defaults. Export round-trips cleanly — quote
+on/off-style values (`'on'`, `'off'`) so YAML doesn't read them as booleans (Import tolerates it either
+way).
+
 ### Notifications
 
 Each guard can optionally run a **notify action** on problem / recovery / escalation. There are no
