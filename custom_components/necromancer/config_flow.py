@@ -60,6 +60,7 @@ from .const import (
     CONF_ID_STATIC,
     CONF_IMPORT_MODE,
     CONF_LABEL,
+    CONF_LINKED_GUARDS,
     CONF_MAX_ATTEMPTS,
     CONF_MODE,
     CONF_NOTIFY_ACTION,
@@ -108,6 +109,7 @@ from .const import (
     STRATEGY_SWITCH_CHECK,
     SUBENTRY_TYPE_DEVICE,
 )
+from .links import group_of
 
 # Strategies that verify recovery against the health entity (engine VERIFY step).
 _CHECK_STRATEGIES = frozenset(
@@ -238,6 +240,7 @@ def _watch_fields(d: dict) -> dict:
 SECTION_STATE = "state_check"
 SECTION_TEMPLATE = "template_check"
 SECTION_DEVICE = "assigned_device"
+SECTION_LINK = "linked_guards"
 SECTION_BEHAVIOR = "behavior"
 SECTION_NOTIFY = "notification"
 SECTION_POWER = "power"
@@ -376,6 +379,29 @@ def _notification_section(d: dict) -> dict:
                 description={"suggested_value": d.get(CONF_NOTIFY_ACTION)},
             ): selector.ActionSelector()
         },
+    )
+
+
+def _link_section(options: list[dict], default: list[str]) -> dict:
+    """Collapsed multi-select of group partners (other recover guards).
+
+    Returns an empty dict when there are no other recover guards to link to, so
+    the section is simply omitted (an empty SelectSelector would be pointless).
+    """
+    if not options:
+        return {}
+    return _section(
+        SECTION_LINK,
+        {
+            vol.Optional(CONF_LINKED_GUARDS, default=default): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options,
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            )
+        },
+        collapsed=True,
     )
 
 
@@ -546,6 +572,8 @@ def _build_data(step1: dict, step2: dict, strategy: str) -> dict:
         data[CONF_DRIVER] = _build_driver(step2, strategy)
     if step1.get(CONF_DEVICE_ID):
         data[CONF_DEVICE_ID] = step1[CONF_DEVICE_ID]
+    if not notify_only and step2.get(CONF_LINKED_GUARDS):
+        data[CONF_LINKED_GUARDS] = sorted(step2[CONF_LINKED_GUARDS])
     return data
 
 
@@ -773,6 +801,45 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     def _reconfig_data(self) -> dict:
         return self._get_reconfigure_subentry().data
 
+    # ---------- guard linking ----------
+    def _recover_guards(self) -> dict[str, dict]:
+        """All recover-mode device subentries by id (notify guards can't link)."""
+        return {
+            sid: dict(se.data)
+            for sid, se in self._get_entry().subentries.items()
+            if se.subentry_type == SUBENTRY_TYPE_DEVICE
+            and se.data.get(CONF_POLICY, {}).get(CONF_TYPE) != MODE_NOTIFY
+        }
+
+    def _own_subentry_id(self) -> str | None:
+        return self._get_reconfigure_subentry().subentry_id if self._reconfig else None
+
+    def _link_options(self) -> list[dict]:
+        """Pickable partners: every other recover guard."""
+        own = self._own_subentry_id()
+        return [
+            {"value": sid, "label": data.get(CONF_NAME) or sid}
+            for sid, data in self._recover_guards().items()
+            if sid != own
+        ]
+
+    def _linked_default(self) -> list[str]:
+        """Current group of the edited guard (clique-closed), for the form."""
+        own = self._own_subentry_id()
+        if own is None:
+            return []
+        guards = self._recover_guards()
+        links = {
+            sid: set(data.get(CONF_LINKED_GUARDS, []) or [])
+            for sid, data in guards.items()
+        }
+        return sorted(group_of(links, set(guards), own))
+
+    def _with_link(self, schema: vol.Schema) -> vol.Schema:
+        """Append the collapsed link section to a recover-strategy schema."""
+        section_dict = _link_section(self._link_options(), self._linked_default())
+        return schema.extend(section_dict) if section_dict else schema
+
     # ---------- source type (entity state vs template) ----------
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -867,8 +934,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         d = _switch_defaults(self._reconfig_data()) if self._reconfig else None
         return self.async_show_form(
             step_id="switch",
-            data_schema=_switch_schema(
-                d, check=self._check, exclude=_own_entities(self.hass)
+            data_schema=self._with_link(
+                _switch_schema(d, check=self._check, exclude=_own_entities(self.hass))
             ),
         )
 
@@ -881,7 +948,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             )
         d = _action_defaults(self._reconfig_data()) if self._reconfig else None
         return self.async_show_form(
-            step_id="action", data_schema=_action_schema(d, check=self._check)
+            step_id="action",
+            data_schema=self._with_link(_action_schema(d, check=self._check)),
         )
 
     async def async_step_actions(
@@ -893,7 +961,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             )
         d = _actions_defaults(self._reconfig_data()) if self._reconfig else None
         return self.async_show_form(
-            step_id="actions", data_schema=_actions_schema(d, check=self._check)
+            step_id="actions",
+            data_schema=self._with_link(_actions_schema(d, check=self._check)),
         )
 
     # ---------- poe_port (auto-resolve against the flat port list) ----------
@@ -905,7 +974,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 _build_data(self._step1, user_input, STRATEGY_POE)
             )
         d = _poe_defaults(self._reconfig_data()) if self._reconfig else None
-        return self.async_show_form(step_id="poe_port", data_schema=_poe_schema(d))
+        return self.async_show_form(
+            step_id="poe_port", data_schema=self._with_link(_poe_schema(d))
+        )
 
     # ---------- notify-only ----------
     async def async_step_notify(
@@ -919,6 +990,29 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         return self.async_show_form(step_id="notify", data_schema=_notify_schema(d))
 
     # ---------- create / update ----------
+    def _apply_link_removals(self, subentry, data: dict) -> None:
+        """Clear our id from any partner we just unlinked (keep links symmetric).
+
+        Additions stay one-sided — the runtime/form closure re-groups them; only a
+        removal must break the edge on both ends, else the closure pulls it back.
+        """
+        old = self._linked_default()  # the group shown in the form (clique-closed)
+        new = set(data.get(CONF_LINKED_GUARDS, []) or [])
+        entry = self._get_entry()
+        for partner_id in set(old) - new:
+            partner = entry.subentries.get(partner_id)
+            if partner is None:
+                continue
+            kept = [
+                x
+                for x in (partner.data.get(CONF_LINKED_GUARDS, []) or [])
+                if x != subentry.subentry_id
+            ]
+            if kept != (partner.data.get(CONF_LINKED_GUARDS, []) or []):
+                self.hass.config_entries.async_update_subentry(
+                    entry, partner, data={**partner.data, CONF_LINKED_GUARDS: kept}
+                )
+
     async def _finish(self, data: dict) -> SubentryFlowResult:
         if not self._reconfig:
             LOGGER.debug("Creating guard subentry for %s", data[CONF_NAME])
@@ -930,6 +1024,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             self.hass.data.setdefault(DOMAIN, {}).setdefault("name_reset", set()).add(
                 subentry.subentry_id
             )
+        self._apply_link_removals(subentry, data)
         LOGGER.debug("Reconfiguring guard subentry for %s", data[CONF_NAME])
         return self.async_update_and_abort(
             self._get_entry(), subentry, title=data[CONF_NAME], data=data

@@ -29,6 +29,7 @@ from .const import (
     CONF_DRIVER,
     CONF_ENTITY_ID,
     CONF_HEALTH,
+    CONF_LINKED_GUARDS,
     CONF_POLICY,
     CONF_PORTS,
     CONF_TYPE,
@@ -43,6 +44,7 @@ from .const import (
 from .drivers import create_driver
 from .engine import DeviceEngine
 from .health import create_health
+from .links import link_components
 from .poe import PoeFabric
 from .policies import create_policy
 
@@ -56,6 +58,9 @@ def _build_engine(
     persisted: dict | None,
     save: Callable[[], None],
     on_health_renamed: Callable[[str], None],
+    subentry_id: str,
+    linked_guards: list[str],
+    engines: dict[str, DeviceEngine],
 ) -> DeviceEngine:
     """Construct a DeviceEngine from a subentry's config dict."""
     return DeviceEngine(
@@ -69,6 +74,9 @@ def _build_engine(
         persisted,
         save,
         on_health_renamed,
+        subentry_id=subentry_id,
+        linked_guards=linked_guards,
+        engines=engines,
     )
 
 
@@ -132,6 +140,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
             schema=vol.Schema({vol.Required(ATTR_ID): cv.string}),
         )
 
+    # Guard linking: resolve each guard's group (clique-closed) from the declared
+    # links across all device subentries, so partners coordinate at runtime.
+    device_ids = {
+        sid
+        for sid, se in entry.subentries.items()
+        if se.subentry_type == SUBENTRY_TYPE_DEVICE
+    }
+    declared_links = {
+        sid: set(se.data.get(CONF_LINKED_GUARDS, []) or [])
+        for sid, se in entry.subentries.items()
+        if se.subentry_type == SUBENTRY_TYPE_DEVICE
+    }
+    groups = link_components(declared_links, device_ids)
+
     for subentry_id, subentry in entry.subentries.items():
         if subentry.subentry_type != SUBENTRY_TYPE_DEVICE:
             continue
@@ -139,6 +161,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
         driver = cfg.get(CONF_DRIVER, {})
         if driver.get(CONF_TYPE) == "poe_port":
             cfg = {**cfg, CONF_DRIVER: {**driver, CONF_PORTS: ports}}
+        linked = sorted(groups.get(subentry_id, {subentry_id}) - {subentry_id})
         engine = _build_engine(
             hass,
             cfg.get(CONF_NAME, subentry.title),
@@ -146,12 +169,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
             stored.get(subentry_id),
             _save,
             _rename_handler(hass, entry, subentry_id),
+            subentry_id,
+            linked,
+            engines,
         )
         await engine.async_start()
         engines[subentry_id] = engine
         LOGGER.info(
             "Guard %r loaded — mode=%s, health=%s, strategy=%s (%s), "
-            "behavior=%s, device_link=%s, auto=%s",
+            "behavior=%s, device_link=%s, linked=%s, auto=%s",
             engine.name,
             "notify-only" if not engine.allows_recovery else "recover",
             engine.health.describe(),
@@ -159,6 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
             engine.driver.target_info(),
             cfg.get(CONF_BEHAVIOR, {}),
             engine.link_device_id or "none",
+            linked or "none",
             engine.auto,
         )
 

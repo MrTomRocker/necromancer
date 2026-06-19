@@ -195,6 +195,13 @@
               "data": {
                 "notify_action": "Aktion"
               }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe"
+              }
             }
           }
         },
@@ -220,6 +227,13 @@
               "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
               "data": {
                 "notify_action": "Aktion"
+              }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe"
               }
             }
           }
@@ -249,6 +263,13 @@
               "data": {
                 "notify_action": "Aktion"
               }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe"
+              }
             }
           }
         },
@@ -274,6 +295,13 @@
               "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
               "data": {
                 "notify_action": "Aktion"
+              }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe"
               }
             }
           }

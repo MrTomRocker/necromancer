@@ -33,6 +33,15 @@ MODE_NOTIFY = "notify"
 # device (optional link to an existing HA device)
 CONF_DEVICE_ID = "device_id"
 
+# guard linking: other recover-guards this guard is grouped with. When any member
+# of the group enters recovery, the others FOLLOW into a hold (no competing
+# recovery) and re-validate afterwards. Stored per guard as a list of partner
+# subentry_ids; the relation is kept symmetric and clique-closed (a group), so
+# linking A-B where B-C exists groups {A,B,C}. The repair lifecycle is also fired
+# as an event so external automations can react.
+CONF_LINKED_GUARDS = "linked_guards"
+EVENT_GUARD_REPAIR = f"{DOMAIN}_guard_repair"
+
 # health source type (wizard step): an entity's state, or a Jinja template that
 # evaluates to true/false (continuous → checkable, so verify still works).
 CONF_SOURCE_TYPE = "source_type"

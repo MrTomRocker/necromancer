@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_COOLDOWN,
     DEFAULT_DEBOUNCE,
     DEFAULT_MAX_ATTEMPTS,
+    EVENT_GUARD_REPAIR,
     LOGGER,
 )
 from .drivers import RecoveryDriver
@@ -73,6 +74,9 @@ class DeviceEngine:
         persisted: dict | None = None,
         save: Callable[[], None] | None = None,
         on_health_renamed: Callable[[str], None] | None = None,
+        subentry_id: str | None = None,
+        linked_guards: list[str] | None = None,
+        engines: dict[str, DeviceEngine] | None = None,
     ) -> None:
         self.hass = hass
         self.name = name
@@ -85,6 +89,14 @@ class DeviceEngine:
         self.link_device_id = link_device_id
         self._save = save or _noop
         self._on_health_renamed = on_health_renamed
+        # Guard linking: our group partners (effective, clique-closed subentry_ids)
+        # and a shared lookup of all engines so we can reach them. When a partner
+        # repairs we FOLLOW (hold + verify) instead of competing.
+        self._subentry_id = subentry_id
+        self._linked = linked_guards or []
+        self._engines = engines if engines is not None else {}
+        self._following = False
+        self._leader: str | None = None
 
         self.state = GState.OK
         self.attempt = 0
@@ -298,6 +310,88 @@ class DeviceEngine:
             self._unsub_timer()
             self._unsub_timer = None
 
+    # ---------- guard linking ----------
+    def _busy(self) -> bool:
+        """True while our own recovery cycle runs (then don't self-suppress)."""
+        return self._cycle_task is not None and not self._cycle_task.done()
+
+    def _partner_engines(self):
+        """Yield the live engines of our group partners (skipping ourselves)."""
+        for pid in self._linked:
+            partner = self._engines.get(pid)
+            if partner is not None and partner is not self:
+                yield partner
+
+    def _find_repairing_partner(self) -> DeviceEngine | None:
+        """A group partner that is actively repairing (the leader to follow)."""
+        for partner in self._partner_engines():
+            if partner.state in (GState.RECOVERING, GState.VERIFY) and not (
+                partner._following
+            ):
+                return partner
+        return None
+
+    def _notify_partners_start(self) -> None:
+        if self._subentry_id is None:
+            return
+        self.hass.bus.async_fire(
+            EVENT_GUARD_REPAIR,
+            {"guard": self._subentry_id, "name": self.name, "phase": "start"},
+        )
+        for partner in self._partner_engines():
+            partner._on_partner_repair_start(self._subentry_id)
+
+    def _notify_partners_done(self, success: bool) -> None:
+        if self._subentry_id is None:
+            return
+        self.hass.bus.async_fire(
+            EVENT_GUARD_REPAIR,
+            {
+                "guard": self._subentry_id,
+                "name": self.name,
+                "phase": "done",
+                "success": success,
+            },
+        )
+        for partner in self._partner_engines():
+            partner._on_partner_repair_done(self._subentry_id, success)
+
+    def _on_partner_repair_start(self, leader_id: str) -> None:
+        """A linked guard started repairing: hold instead of competing."""
+        if not self.allows_recovery or self._busy() or self._following:
+            return
+        LOGGER.info(
+            "%s: linked guard is repairing — following (hold, verify after)", self.name
+        )
+        self._following = True
+        self._leader = leader_id
+        self._cancel_timer()
+        self._set_state(GState.RECOVERING)
+
+    def _on_partner_repair_done(self, leader_id: str, success: bool) -> None:
+        """Our leader finished: re-validate; self-recover only if still unhealthy."""
+        if not self._following or self._leader != leader_id:
+            return
+        self._following = False
+        self._leader = None
+        if self._busy():
+            return
+        self.hass.async_create_task(self._validate_after_repair())
+
+    async def _validate_after_repair(self) -> None:
+        """Re-check health after a group repair; fall back to own recovery if needed."""
+        self._set_state(GState.VERIFY)
+        ok = await self._wait_health_ok(
+            self._int(CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW)
+        )
+        LOGGER.info(
+            "%s: post-link-repair validation %s",
+            self.name,
+            "healthy" if ok else "still failing — own recovery",
+        )
+        self._set_state(GState.OK)
+        self._evaluate()
+
     # ---------- health handling ----------
     @callback
     def _handle_health_event(self, event) -> None:
@@ -311,6 +405,11 @@ class DeviceEngine:
             self.last_seen = dt_util.utcnow()
             # Learn the driver's current target while healthy (poe_port cache).
             self.driver.observe()
+        # While following a linked guard's repair, expect our device to drop too;
+        # hold (no competing recovery). _on_partner_repair_done resumes us.
+        if self._following:
+            self._emit()
+            return
         if self._verify_event is not None and h == Health.OK:
             self._verify_event.set()
 
@@ -358,6 +457,16 @@ class DeviceEngine:
                 )
             self._set_state(GState.ESCALATED)
             return
+        # Linking arbitration: if a group partner is already repairing, follow it
+        # (hold + verify after) instead of launching a competing recovery.
+        if (leader := self._find_repairing_partner()) is not None:
+            LOGGER.info(
+                "%s: linked guard %r already repairing — following instead",
+                self.name,
+                leader.name,
+            )
+            self._on_partner_repair_start(leader._subentry_id)
+            return
         LOGGER.info("%s debounce elapsed, starting recovery", self.name)
         self._start_cycle()
 
@@ -374,6 +483,9 @@ class DeviceEngine:
         self._start_cycle()
 
     async def _run_recovery_cycle(self) -> None:
+        # Tell our group we're repairing so partners follow (hold) instead of
+        # launching their own recovery for the same root cause.
+        self._notify_partners_start()
         try:
             while True:
                 self.attempt += 1
@@ -420,6 +532,7 @@ class DeviceEngine:
                     return
         finally:
             self._cycle_task = None
+            self._notify_partners_done(self.state == GState.COOLDOWN)
 
     async def _wait_health_ok(self, timeout: int) -> bool:
         if self.health.evaluate() == Health.OK:
