@@ -31,8 +31,9 @@ one of them:
 
 ## 2. Level 1 — unit (pure logic, `pytest`, no HA running)
 
-Fast, deterministic, the first thing to add. Candidates (each maps to an
-invariant):
+Fast, deterministic, the first thing to add. The port-YAML row already has a
+working standalone harness (§5); the rest are candidates. Each maps to an
+invariant:
 
 | Module | What to assert |
 |---|---|
@@ -40,7 +41,7 @@ invariant):
 | `health/template.py` | `result_as_boolean` cases (`true/false/on/off/1/0/'banana'/42`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. |
 | `drivers/*.can_recover` | missing switch / missing+ambiguous port / invalid+empty action → `(False, reason)`. |
 | `config_flow` helpers | `_flatten_sections` (nested→flat), `_as_list`, `_watch_config`/`_watch_defaults`, `_build_data` (health block per source type, behaviour per check), `_current_strategy`, `_source_type_of`. |
-| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / malformed YAML / non-numeric timing. `_ports_to_yaml` round-trips; on/off survive both ways (export quotes, import coerces YAML-1.1 booleans). Import **merge** = upsert by `label`, **replace** = overwrite; invalid import leaves the list untouched. |
+| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / `null` / list-of-scalar / malformed YAML / non-numeric **or negative** timing; trim, scalar→list, missing/empty status→default, int→str, unknown keys dropped, unicode. `_ports_to_yaml` round-trips; bool/number-like values survive both ways (export quotes, import coerces YAML-1.1 `on/off/yes/no` back to strings — purely-numeric colon ids like `1:2:3` are the one thing to quote). Import **merge** = upsert by `label`, **replace** = overwrite; invalid import leaves the list untouched. *(A standalone harness — see §5 — exercises 35 of these against the real module.)* |
 | `actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. |
 
 ## 3. Level 2 — integration (HA test harness or dev container)
@@ -58,6 +59,12 @@ Drive the real flows and the engine:
   already-unhealthy detection.
 - **Corner cases**: broken template rejected at submit; missing service in an
   action → escalate (not false success); bad notify action → logged, no crash.
+- **Port import/export (options flow)**: the menu exposes import + export; import
+  **merge** (upsert by `label`) vs **replace**; an invalid paste returns
+  `import_failed` with the reason in `description_placeholders` and leaves the list
+  untouched; `import_mode` omitted defaults to merge; export multi-select (all
+  pre-selected, empty selection tolerated) → round-trip YAML. Driven
+  **non-destructively** (never call `save`), so the entry's real ports are safe.
 
 These run today against the dev container by driving the REST/WS flow API and
 asserting on `sensor.*_status` + the error log (see the regression checklist for
@@ -75,14 +82,31 @@ line / entity state so a run is unambiguous.
 ## 5. Dev-container live harness
 
 The integration is developed inside an HA-core dev container with the package
-mounted live. Verification pattern used throughout development:
+mounted live. Two complementary harnesses are used:
 
-- Drive subentry/options flows via `POST /api/config/config_entries/{subentries,options}/flow`.
+**Standalone logic (no HA, no token).** Run a script with the dev venv python and
+`PYTHONPATH=<config dir>` so `from custom_components.necromancer import config_flow`
+resolves. For flow methods, instantiate the flow and monkeypatch `async_show_form`
+/ `async_show_menu` / `async_step_init` to capture their result, then call the real
+`async_step_*` and assert on the mutated state. This is how the port import/export
+logic is covered (parse / validate / merge / replace / export round-trip), fast and
+without a running instance.
+
+**Live flow (running HA + token).** Pattern used throughout development:
+
+- Drive subentry/options flows via `POST /api/config/config_entries/{subentries,options}/flow`
+  — open with `{"handler": …}`, navigate a menu with `{"next_step_id": …}`, submit a
+  step by posting its fields. For read-only checks (import/export) **don't call
+  `save`** and `DELETE` the flow at the end, so the real config stays untouched.
 - Toggle test helpers (`input_boolean.test_*`, `input_select.test_state`, …) and
   read back `GET /api/states/...` + `/api/error_log`.
 - Fetch served translations via WS `frontend/get_translations` to confirm keys
   render (and that selectors actually surface labels).
-- Restart (`hass -c config`) to exercise persistence and code reloads.
+
+**Restart** — code changes need a module re-import. The process runs as
+`python -m homeassistant -c ./config`; stop it with `pkill -f "[h]omeassistant -c"`
+(the `[h]` keeps pkill from matching its own command line), relaunch in the
+background, then poll `GET /api/config` until `state == "RUNNING"`.
 
 A clean run starts from an empty service entry (delete leftover `device` subentries via WS
 `config_entries/subentries/delete` and clear options ports).

@@ -238,7 +238,8 @@ existing device uses the Battery-Notes pattern (`device_info=None` +
 __init__.py        setup: build one DeviceEngine per device subentry, inject
                    ports into poe_port guards, reconcile devices/entities, Store
 engine.py          the state machine, timing, persistence, health wiring
-config_flow.py     service + device-subentry + options(ports) flows, schemas, sections
+config_flow.py     service + device-subentry + options(ports) flows, schemas, sections,
+                   YAML port import/export (_parse_ports_yaml / _ports_to_yaml)
 const.py           keys, defaults, strategy/source constants
 entity.py          base entity (DeviceInfo, unique_id, link handling)
 sensor/binary_sensor/switch/button.py   the four view entities
