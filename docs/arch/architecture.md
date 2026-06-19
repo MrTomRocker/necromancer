@@ -34,18 +34,18 @@ pays off** (the PoE port resolver is the single bespoke driver).
 
 ## 2. Configuration model
 
-Necromancer is a **single hub** config entry (`integration_type: service`, added
+Necromancer is a **single service** config entry (`integration_type: service`, added
 once, blank). Everything else hangs off it:
 
 | Thing | Where it lives |
 |---|---|
-| **Hub** | One config entry (`data` blank). |
+| **Service** | One config entry (`data` blank). |
 | **Guarded device** | A config **subentry** of type `device` (one per watched device). Added via *“Add device”*, edited via its *Reconfigure* button. |
-| **PoE ports** | A flat list in the hub entry’s **options** (`entry.options["ports"]`), managed via the **options flow**. |
+| **PoE ports** | A flat list in the service entry’s **options** (`entry.options["ports"]`), managed via the **options flow**. |
 
 One `DeviceEngine` is built per `device` subentry and lives in
 `entry.runtime_data` keyed by `subentry_id`. Adding/changing a subentry reloads
-the hub; an options (ports) change also reloads it, so `poe_port` guards always
+the service; an options (ports) change also reloads it, so `poe_port` guards always
 see a fresh port list.
 
 There is **no per-area grouping** and no second config entry — an earlier
@@ -227,7 +227,7 @@ existing device uses the Battery-Notes pattern (`device_info=None` +
 __init__.py        setup: build one DeviceEngine per device subentry, inject
                    ports into poe_port guards, reconcile devices/entities, Store
 engine.py          the state machine, timing, persistence, health wiring
-config_flow.py     hub + device-subentry + options(ports) flows, schemas, sections
+config_flow.py     service + device-subentry + options(ports) flows, schemas, sections
 const.py           keys, defaults, strategy/source constants
 entity.py          base entity (DeviceInfo, unique_id, link handling)
 sensor/binary_sensor/switch/button.py   the four view entities

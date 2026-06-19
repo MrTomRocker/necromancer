@@ -83,7 +83,7 @@ mounted live. Verification pattern used throughout development:
   render (and that selectors actually surface labels).
 - Restart (`hass -c config`) to exercise persistence and code reloads.
 
-A clean run starts from an empty hub (delete leftover `device` subentries via WS
+A clean run starts from an empty service entry (delete leftover `device` subentries via WS
 `config_entries/subentries/delete` and clear options ports).
 
 ---

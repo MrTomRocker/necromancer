@@ -8,7 +8,7 @@ LOGGER = logging.getLogger(__package__)
 
 DOMAIN = "necromancer"
 
-# Each guarded device is a config subentry of the single hub entry.
+# Each guarded device is a config subentry of the single service entry.
 SUBENTRY_TYPE_DEVICE = "device"
 
 # Runtime-state persistence (entity-independent; entities are display only).
@@ -64,7 +64,7 @@ CONF_OFF_ACTION = "off_action"
 CONF_ON_ACTION = "on_action"
 
 # driver (poe_port): resolve device -> port from the flat port list, then cycle +
-# verify. The port list lives in the hub entry's options (managed via the options
+# verify. The port list lives in the service entry's options (managed via the options
 # flow); every poe_port guard searches the whole list by its expected_id.
 CONF_EXPECTED_ID = "expected_id"
 CONF_PORTS = "ports"

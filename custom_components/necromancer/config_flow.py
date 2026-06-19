@@ -1,6 +1,6 @@
 """Config + subentry + options flow for Necromancer.
 
-The integration is a **single hub** entry (added once, blank). Every guarded
+The integration is a **single service** entry (added once, blank). Every guarded
 device is a config **subentry** of type `device`, added via "Add device" and
 edited via its "Reconfigure" button.
 
@@ -15,7 +15,7 @@ The health "what to watch" block — entity + attribute (empty = state) + on/off
 values — lives in the device step. Recover guards are at most 3 steps (device &
 health → strategy → recovery); notify guards are 2.
 
-PoE ports are a single **flat list** managed via the hub's **options flow**
+PoE ports are a single **flat list** managed via the service's **options flow**
 (add / edit / delete port). Every `poe_port` guard searches that whole list by
 its `expected_id`; there is no per-area grouping.
 """
@@ -720,7 +720,7 @@ def _port_schema(d: dict | None = None, *, exclude: list[str] = ()) -> vol.Schem
 
 
 class NecromancerConfigFlow(ConfigFlow, domain=DOMAIN):
-    """A single blank hub entry.
+    """A single blank service entry.
 
     Guarded devices are `device` subentries; PoE ports are a flat list in the
     entry's options (the options flow).

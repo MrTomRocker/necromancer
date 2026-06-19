@@ -149,12 +149,12 @@ You can also use this shortcut once the repository is known to HACS:
 
 ## Configuration
 
-Necromancer is a **single hub**: you add the integration once (no input), then add a *guarded
-device* for each thing you want watched.
+You add Necromancer **once** (no input), then add a *guarded device* for each thing you want
+watched.
 
 1. Go to **Settings → Devices & Services**, click **+ Add Integration** and search for
-   **Necromancer**. Confirm — the hub is added empty.
-2. On the Necromancer hub, click **Add device** to create a guard. The wizard walks you through:
+   **Necromancer**. Confirm — it's added with no devices yet.
+2. On the Necromancer entry, click **Add device** to create a guard. The wizard walks you through:
    **health source → device & check → strategy → recovery/notification**.
 
 <div align="center">
@@ -165,7 +165,7 @@ Along the way you also set the **timing** — how long a problem must persist be
 long to wait for the device to recover, and how many times to retry before escalating. The
 defaults are sensible; tune them per device.
 
-**PoE ports** (only needed for the Auto-PoE strategy) are managed as a flat list under the hub's
+**PoE ports** (only needed for the Auto-PoE strategy) are managed as a flat list under Necromancer's
 **Configure** (options). Each port carries a recognizable id, a status entity, the actuator
 switch to cycle, and its own timing.
 

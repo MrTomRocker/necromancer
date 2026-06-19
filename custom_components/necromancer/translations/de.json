@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "description": "Richte den Necromancer-Hub ein. Die zu überwachenden Geräte fügst du anschließend über den Hub hinzu."
+        "description": "Richte Necromancer ein. Die zu überwachenden Geräte fügst du anschließend hinzu."
       }
     },
     "abort": {

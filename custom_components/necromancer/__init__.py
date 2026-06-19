@@ -1,7 +1,7 @@
 """The Necromancer integration — revives dead devices.
 
 HealthSource -> Engine (RecoveryPolicy) -> RecoveryDriver.
-One config entry = the Necromancer hub. Each **guarded device** is a config
+One config entry = the Necromancer service. Each **guarded device** is a config
 *subentry* (added via "Add device"). One DeviceEngine per subentry lives in
 entry.runtime_data, keyed by subentry_id.
 """
@@ -82,7 +82,7 @@ def _rename_handler(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) -> bool:
-    """Set up the hub: one engine per guarded-device subentry."""
+    """Set up the service: one engine per guarded-device subentry."""
     store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
     stored = await store.async_load() or {}
     engines: dict[str, DeviceEngine] = {}
@@ -136,7 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
         store,
         _serialize,
     )
-    LOGGER.debug("Hub set up with %s guarded device(s)", len(engines))
+    LOGGER.debug("Service set up with %s guarded device(s)", len(engines))
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -213,7 +213,7 @@ def _reconcile_devices(
 async def _async_reload_entry(
     hass: HomeAssistant, entry: NecromancerConfigEntry
 ) -> None:
-    """Reload the hub when subentries (devices) are added/changed/removed."""
+    """Reload the service when subentries (devices) are added/changed/removed."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -229,7 +229,7 @@ async def async_remove_config_entry_device(
 async def async_unload_entry(
     hass: HomeAssistant, entry: NecromancerConfigEntry
 ) -> bool:
-    """Unload the hub and stop all engines."""
+    """Unload the service and stop all engines."""
     # Flush runtime state before tearing down (engines still hold it), so a reload
     # (rename/reconfigure) does not read a stale store.
     stores = hass.data.get(DOMAIN, {}).get("stores", {})

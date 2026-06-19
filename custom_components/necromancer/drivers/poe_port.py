@@ -12,7 +12,7 @@ the device's health — is the engine's own VERIFY step (boot_window), so it is 
 repeated here.
 
 No match / ambiguous match -> `can_recover` blocks -> the engine escalates and
-logs (no blind cycling). The port list lives in the hub entry's options and is
+logs (no blind cycling). The port list lives in the service entry's options and is
 injected into the driver config at setup (see __init__).
 """
 
