@@ -250,6 +250,21 @@ async def test_links_closure(hass, _):
     assert comp["A"] == comp["B"] == comp["C"] == {"A", "B", "C"}
 
 
+async def test_flow_rejects_empty_action(hass, _):
+    flow = cf.DeviceSubentryFlow()
+    flow.hass = hass
+    flow._reconfig = False
+    flow._strategy = "action"
+    flow._step1 = {cf.CONF_NAME: "X", cf.CONF_SOURCE_TYPE: cf.SOURCE_TEMPLATE,
+                   cf.CONF_MODE: cf.MODE_RECOVER, cf.CONF_TEMPLATE: "{{ true }}"}
+    flow._with_link = lambda schema: schema  # avoid needing a real config entry
+    captured: dict = {}
+    flow.async_show_form = lambda **kw: captured.update(kw) or kw
+    await flow.async_step_action({"action": [], "behavior": {"debounce": 2, "cooldown": 2},
+                                 "notification": {}, "linked_guards": {"linked_guards": []}})
+    assert captured.get("errors", {}).get(cf.CONF_ACTION) == "action_required", captured
+
+
 async def test_policy_reasons(hass, _):
     from custom_components.necromancer.const import REASON_AUTO_OFF, REASON_OBSERVE
     from custom_components.necromancer.policies.notify import NotifyPolicy

@@ -114,7 +114,8 @@
       },
       "error": {
         "no_self_link": "Necromancer-eigene Geräte können nicht verknüpft werden. Wähle ein anderes Gerät.",
-        "duplicate_name": "Ein Guard mit diesem Namen existiert bereits. Wähle einen eindeutigen Namen, damit die Status-Entitäten eindeutig bleiben."
+        "duplicate_name": "Ein Guard mit diesem Namen existiert bereits. Wähle einen eindeutigen Namen, damit die Status-Entitäten eindeutig bleiben.",
+        "action_required": "Diese Reparatur braucht eine Aktion — ein Guard ohne Aktion kann nur eskalieren."
       },
       "abort": {
         "reconfigure_successful": "Neukonfiguration erfolgreich."

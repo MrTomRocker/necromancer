@@ -958,27 +958,47 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_action(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return await self._finish(
-                _build_data(self._step1, user_input, self._strategy)
-            )
-        d = _action_defaults(self._reconfig_data()) if self._reconfig else None
+            flat = _flatten_sections(user_input)
+            if not flat.get(CONF_ACTION):
+                # An action guard with no action can only ever escalate — reject it
+                # here instead of letting it fail at runtime.
+                errors[CONF_ACTION] = "action_required"
+            else:
+                return await self._finish(
+                    _build_data(self._step1, user_input, self._strategy)
+                )
+            d = flat
+        else:
+            d = _action_defaults(self._reconfig_data()) if self._reconfig else None
         return self.async_show_form(
             step_id="action",
             data_schema=self._with_link(_action_schema(d, check=self._check)),
+            errors=errors,
         )
 
     async def async_step_actions(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return await self._finish(
-                _build_data(self._step1, user_input, self._strategy)
-            )
-        d = _actions_defaults(self._reconfig_data()) if self._reconfig else None
+            flat = _flatten_sections(user_input)
+            if not flat.get(CONF_OFF_ACTION):
+                errors[CONF_OFF_ACTION] = "action_required"
+            if not flat.get(CONF_ON_ACTION):
+                errors[CONF_ON_ACTION] = "action_required"
+            if not errors:
+                return await self._finish(
+                    _build_data(self._step1, user_input, self._strategy)
+                )
+            d = flat
+        else:
+            d = _actions_defaults(self._reconfig_data()) if self._reconfig else None
         return self.async_show_form(
             step_id="actions",
             data_schema=self._with_link(_actions_schema(d, check=self._check)),
+            errors=errors,
         )
 
     # ---------- poe_port (auto-resolve against the flat port list) ----------

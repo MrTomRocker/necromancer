@@ -114,7 +114,8 @@
       },
       "error": {
         "no_self_link": "Necromancer's own devices can't be linked. Pick a different device.",
-        "duplicate_name": "A guard with this name already exists. Pick a unique name so the status entities stay unambiguous."
+        "duplicate_name": "A guard with this name already exists. Pick a unique name so the status entities stay unambiguous.",
+        "action_required": "This recovery needs an action — a guard with no action can only escalate."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration successful."
