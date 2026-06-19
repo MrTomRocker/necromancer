@@ -113,12 +113,16 @@ class PoePortDriver(RecoveryDriver):
         if not label or self._cache_set is None:
             return
         current = self._cache_get() if self._cache_get is not None else None
-        if label != current:
-            LOGGER.debug(
-                "PoE %s: saving resolved port %r to persistence (was %r)",
+        if current is None:
+            LOGGER.info("PoE %s: learned port %r", self.expected_id, label)
+        elif label != current:
+            # The device is now seen on a different port than last known — worth a
+            # human glance (re-cabling, or a MAC showing up on the wrong port).
+            LOGGER.warning(
+                "PoE %s: resolved port changed %r -> %r",
                 self.expected_id,
-                label,
                 current,
+                label,
             )
         self._cache_set(label)
 
