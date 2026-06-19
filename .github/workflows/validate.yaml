@@ -18,8 +18,6 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
-          # Remove "brands" once the icon is merged into home-assistant/brands.
-          ignore: brands
 
   lint:
     runs-on: ubuntu-latest
