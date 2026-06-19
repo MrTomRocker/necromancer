@@ -38,23 +38,22 @@ one of them:
 
 ---
 
-## 2. Level 1 — unit (pure logic, `pytest`, no HA running)
+## 2. Level 1 — unit (pure logic / real `hass`)
 
-Fast, deterministic, the first thing to add. The port-YAML row already has a
-working standalone harness (§5); the rest are candidates. Each maps to an
-invariant:
+Fast, deterministic. Three runnable modules cover this level today (run them with
+the dev venv, see §5): **`tests/test_units.py`** (15), **`tests/test_poe.py`** (14),
+**`tests/test_engine.py`** (10). Each row maps to an invariant:
 
-| Module | What to assert |
-|---|---|
-| `health/entity_state.py` | value-list mapping → OK/UNHEALTHY/UNKNOWN; unavailable/unknown → UNKNOWN; legacy `healthy_state` fallback; multiselect membership. |
-| `health/template.py` | `result_as_boolean` cases (`true/false/on/off/1/0/'banana'/42`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. |
-| `drivers/*.can_recover` | missing switch / missing+ambiguous port / invalid+empty action → `(False, reason)`. |
-| `drivers/poe_port` cache | `observe()` learns the live single match; `_select()` = live-wins → last-known fallback (on zero live) → block (ambiguous/none). Engine `resolved_port` persists in the Store, `bind_cache`/`observe` wire it, `_set_resolved_port` saves on change only. |
-| `config_flow` helpers | `_flatten_sections` (nested→flat), `_as_list`, `_watch_config`/`_watch_defaults`, `_build_data` (health block per source type, behaviour per check), `_current_strategy`, `_source_type_of`. |
-| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / `null` / list-of-scalar / malformed YAML / non-numeric **or negative** timing; trim, scalar→list, missing/empty status→default, int→str, unknown keys dropped, unicode. `_ports_to_yaml` round-trips; bool/number-like values survive both ways (export quotes, import coerces YAML-1.1 `on/off/yes/no` back to strings — purely-numeric colon ids like `1:2:3` are the one thing to quote). Import **merge** = upsert by `label`, **replace** = overwrite; invalid import leaves the list untouched. *(A standalone harness — see §5 — exercises 35 of these against the real module.)* |
-| `actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. |
-| `links.py` | `link_components` / `group_of`: undirected union → connected components (clique closure); transitive (A–B, B–C ⇒ `{A,B,C}`); a one-sided link reads symmetric; stale ids dropped. *(standalone harness covers these.)* |
-| `poe.py` (fabric) | `resolve_with_reason`: one live match wins (refreshes cache) → last-known cache → ambiguous/none with a reason; `repair` sets status `recovering`→`good`/`failed`, serialised by the per-port lock; a status change fires `necromancer_poe_port`; the `poe_port` driver delegates resolve+cycle to it (one cache, one lock, shared with the service). *(Covered by `tests/test_poe.py` — 14 cases against a real `hass`.)* |
+| Module | What to assert | Covered by |
+|---|---|---|
+| `health/entity_state.py` | value-list mapping → OK/UNHEALTHY/UNKNOWN; unavailable/unknown → UNKNOWN; explicit-off-wins; legacy `healthy_state` fallback. | `test_units` |
+| `health/template.py` | `result_as_boolean` cases (`true/false/on/0/'on'`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. | `test_units` |
+| `drivers/*.can_recover` | missing switch / missing+invalid action → `(False, reason)`; the poe_port adapter blocks on no/ambiguous match. | `test_units`, `test_poe` |
+| `config_flow` helpers | `_flatten_sections` (nested→flat), `_as_list`, `_build_data` (health block per source type, behaviour per check), `_current_strategy`, `_source_type_of`. | `test_units` |
+| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / `null` / list-of-scalar / malformed YAML / non-numeric **or negative** timing; trim, scalar→list, missing/empty status→default, int→str. `_ports_to_yaml` round-trips; import **merge** = upsert by `label`, **replace** = overwrite. | `test_units` |
+| `actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. | `test_units` |
+| `links.py` | `link_components` / `group_of`: undirected union → connected components (clique closure); transitive (A–B, B–C ⇒ `{A,B,C}`); a one-sided link reads symmetric; stale ids dropped. | `test_units` |
+| `poe.py` (fabric) + `poe_port` driver | `resolve_with_reason`: one live match wins (refreshes cache) → last-known cache → ambiguous/none with a reason; `repair` sets status `recovering`→`good`/`failed`, serialised by the per-port lock; a status change fires `necromancer_poe_port`; the `poe_port` driver delegates resolve+cycle to the fabric (one cache, one lock, **shared with the service**). | `test_poe` |
 
 ## 3. Level 2 — integration (HA test harness or dev container)
 
@@ -62,11 +61,13 @@ Drive the real flows and the engine:
 
 - **Config flow → engine setup**: each strategy + source type builds a valid
   guard; sections flatten; `poe_port` injects the flat port list.
-- **State machine**: happy path (recover→verify→cooldown→ok, `recover_count++`);
-  max-attempts → `ESCALATED`; auto-off → `ESCALATED`; manual recover; cooldown→
-  suspect.
-- **Persistence across restart**: ESCALATED stays (still unhealthy) / auto-clears
-  (healthy again); `recover_count` and `auto` survive.
+- **State machine** *(automated: `tests/test_engine.py`, real hass + time-travel)*:
+  happy path (recover→verify→cooldown→ok, `recover_count++`); debounce blip
+  absorbed; max-attempts → `ESCALATED`; raising driver = failed attempt; auto-off →
+  `ESCALATED`; manual recover; cooldown→suspect.
+- **Persistence across restart** *(automated: `tests/test_engine.py`)*: ESCALATED
+  stays (still unhealthy) / auto-clears (healthy again); `recover_count` and `auto`
+  survive; snapshot round-trip.
 - **Health robustness**: rename-following; disable/enable live; remove; startup
   already-unhealthy detection.
 - **Corner cases**: broken template rejected at submit; missing service in an
