@@ -189,6 +189,22 @@ async def test_relearn_recable_updates_cache(hass, _stubs):
     assert f.cache.get("aa:bb") == "P2", f.cache
 
 
+async def test_placeholder_ids_are_never_learned(hass, _stubs):
+    # ports with nothing connected report a placeholder ("-"); the fabric must not
+    # treat that as a device hopping between ports (would log a WARNING storm).
+    hass.states.async_set("sensor.nb1", "-", {})
+    hass.states.async_set("sensor.nb2", "-", {})
+    f = PoeFabric(hass)
+    f.set_ports([
+        port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.nb1"),
+        port("P2", "switch.a2", "binary_sensor.s2", id_entity="sensor.nb2"),
+    ])
+    assert f.cache == {}, f.cache  # nothing learned from "-"
+    # a placeholder identifier resolves to nothing (never matches a "-" port)
+    p, reason = f.resolve_with_reason("-")
+    assert p is None and "no port matches" in reason, (p, reason)
+
+
 # ---------------- cycle / status / lock ----------------
 
 

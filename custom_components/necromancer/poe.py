@@ -44,8 +44,16 @@ PORT_FAILED = "failed"
 EVENT_PORT_STATUS = f"{DOMAIN}_poe_port"
 
 
+# Values a port reports when *nothing* is connected — never a real device id.
+_PLACEHOLDER_IDS = {"", "-", "unknown", "unavailable", "none"}
+
+
 def _norm(value: object) -> str | None:
-    return value.strip().lower() if isinstance(value, str) else value
+    """Normalize an id; placeholder/empty values collapse to None ("no id")."""
+    if not isinstance(value, str):
+        return value
+    norm = value.strip().lower()
+    return None if norm in _PLACEHOLDER_IDS else norm
 
 
 class PoeFabric:
@@ -151,7 +159,7 @@ class PoeFabric:
         live: list[dict] = []
         for port in self._ports:
             pid = self._port_id(port)
-            hit = _norm(pid) == target
+            hit = target is not None and _norm(pid) == target
             LOGGER.debug(
                 "PoE %s:   port %r reports id %r%s",
                 identifier,
@@ -179,7 +187,11 @@ class PoeFabric:
     def target_info(self, identifier: str) -> str:
         """Where an id currently resolves (for the guard's diagnostics line)."""
         target = _norm(identifier)
-        live = [p for p in self._ports if _norm(self._port_id(p)) == target]
+        live = [
+            p
+            for p in self._ports
+            if target is not None and _norm(self._port_id(p)) == target
+        ]
         if len(live) == 1:
             return f"{live[0].get(CONF_LABEL, '?')} → {live[0][CONF_ACTUATOR]}"
         cached = self._by_label(self._cache.get(target))
