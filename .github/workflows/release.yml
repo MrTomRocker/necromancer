@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  release-zip:
+    name: Attach integration zip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Zip the integration
+        run: |
+          cd custom_components/necromancer
+          zip necromancer.zip -r ./
+      - name: Upload zip to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: custom_components/necromancer/necromancer.zip

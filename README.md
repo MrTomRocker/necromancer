@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue)](#license)
 [![issues](https://img.shields.io/github/issues/MrTomRocker/homeassistant-necromancer)](https://github.com/MrTomRocker/homeassistant-necromancer/issues)
 ![HACS](https://img.shields.io/badge/HACS-none-inactive)
+[![Downloads](https://img.shields.io/github/downloads/MrTomRocker/homeassistant-necromancer/total)](https://github.com/MrTomRocker/homeassistant-necromancer/releases)
 
 <div align="center">
   <img width="70%" alt="Necromancer guards overview" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/overview.png">
