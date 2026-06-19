@@ -398,14 +398,6 @@ plus `name` and `event` as variables, so you decide whether and how to be notifi
 
 The action runs **detached**, so a deliberate delay in your notify flow never stalls the engine.
 
-## Architecture & internals
-
-This README is the user's guide. For the design — the full state machine, the health/driver/strategy
-matrix, the PoE fabric and the guard-linking internals — see
-[`docs/arch/architecture.md`](./docs/arch/architecture.md). Every timer and every behavioural case
-(with its timing) is catalogued in [`docs/arch/timing.md`](./docs/arch/timing.md), and the test
-concept lives in [`docs/arch/testing.md`](./docs/arch/testing.md).
-
 ## Contributing
 
 Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md). In short: fork, lint &

@@ -14,7 +14,7 @@ GitHub is used to host the code, to track issues and feature requests, and to ac
 Pull requests are the best way to propose changes to the codebase:
 
 1. Fork the repo and create your branch from `main`.
-2. If you've changed behaviour, update the documentation (`README.md` and the relevant page under [`docs/arch/`](./docs/arch)).
+2. If you've changed behaviour, update the documentation (`README.md`).
 3. Make sure your code lints and is formatted (see [Coding style](#coding-style)).
 4. Test your contribution (see [Testing](#testing)).
 5. Open the pull request.
@@ -65,7 +65,9 @@ Additional house rules:
 
 ## Testing
 
-See [`docs/arch/testing.md`](./docs/arch/testing.md) for the full test concept (invariants, three test levels, the dev-container live harness, and the pre-commit gates). At minimum, run the **P0** manual regression block after any change to the engine, persistence, health sources, or the config flow.
+Run the test suites under `tests/` (`test_units`, `test_poe`, `test_engine`,
+`test_integration`) against a Home Assistant core checkout, plus the pre-commit
+gates (ruff check/format, `py_compile`, translation symmetry, `hassfest`).
 
 This custom component is developed inside a Home Assistant Core **dev container** with the package mounted live, so edits take effect without a redeploy. The container ships a standalone Home Assistant instance pre-configured for development.
 
