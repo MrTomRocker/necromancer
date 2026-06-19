@@ -235,9 +235,11 @@ Necromancer's **Configure** you can also **Export** and **Import** the whole lis
 ```
 
 Only `label`, `actuator` and `status_entity` are required; identity (`id_entity`/`id_attribute` or
-`id_static`) and timings are optional and fall back to the defaults. Export round-trips cleanly — quote
-on/off-style values (`'on'`, `'off'`) so YAML doesn't read them as booleans (Import tolerates it either
-way).
+`id_static`) and timings are optional and fall back to the defaults (timings must be ≥ 0). Quote any
+value YAML might misread — booleans (`on`/`off`/`yes`/`no`/`true`/`false`) and all-digit or
+digit-and-colon ids — as in `'on'` or `'00:11:22'`. Export already quotes those for you, so an
+export → edit → import round-trip is always safe; on error the import is rejected with the reason and
+nothing changes.
 
 ### Notifications
 

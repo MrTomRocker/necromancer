@@ -209,8 +209,9 @@ Steps for a recover guard: **source type → device & state → strategy → rec
   **import / export** for bulk edits. *Export* multi-selects ports (all
   pre-selected) and dumps them to YAML; *import* parses pasted YAML and either
   **merges** (upsert by `label`) or **replaces** the list — every port is
-  validated (`_parse_ports_yaml` → `_normalize_imported_port`) and nothing is
-  applied on error (the reason is surfaced via `description_placeholders`). YAML
+  validated (`_parse_ports_yaml` → `_normalize_imported_port`: required
+  label/actuator/status_entity, timings numeric and ≥ 0) and nothing is applied
+  on error (the reason is surfaced via `description_placeholders`). YAML
   round-trips cleanly: `_ports_to_yaml` quotes on/off values and import coerces
   YAML 1.1 booleans (`on`/`off`/`yes`) back to strings, so the bool footgun can’t
   corrupt a status list.

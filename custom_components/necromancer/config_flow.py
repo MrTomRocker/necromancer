@@ -1010,6 +1010,8 @@ def _normalize_imported_port(raw: object) -> dict:
         }
     except (TypeError, ValueError) as err:
         raise ValueError(f"port '{label}' has a non-numeric timing value") from err
+    if any(value < 0 for value in timing.values()):
+        raise ValueError(f"port '{label}' has a negative timing value")
     port: dict = {
         CONF_LABEL: label,
         CONF_ACTUATOR: actuator,
