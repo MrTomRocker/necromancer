@@ -151,7 +151,7 @@ NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
         "recovery_attempt": "{name}: Recovery {attempt}/{max}",
         "recovery_success": "{name}: Recovery succeeded.",
         "recovery_failed": "{name}: Recovery failed after {attempt} attempt(s).",
-        "recovery_blocked": "{name}: Recovery blocked — recovery action missing or not callable.",  # noqa: E501
+        "recovery_blocked": "{name}: Recovery blocked — recovery action missing or not callable.",
         "no_auto_recovery": "{name}: Problem detected, auto-recovery is disabled.",
         "problem_detected": "{name}: Problem detected (notify only).",
         "linked_repair_failed": "{name}: Linked repair failed — still faulty.",
@@ -160,10 +160,10 @@ NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
         "recovery_attempt": "{name}: Reparatur {attempt}/{max}",
         "recovery_success": "{name}: Reparatur erfolgreich.",
         "recovery_failed": "{name}: Reparatur fehlgeschlagen nach {attempt} Versuchen.",
-        "recovery_blocked": "{name}: Reparatur blockiert — Reparatur-Aktion fehlt oder ist nicht aufrufbar.",  # noqa: E501
+        "recovery_blocked": "{name}: Reparatur blockiert — Reparatur-Aktion fehlt oder ist nicht aufrufbar.",
         "no_auto_recovery": "{name}: Problem erkannt, Auto-Reparatur ist deaktiviert.",
         "problem_detected": "{name}: Problem erkannt (nur Benachrichtigung).",
         # linked_repair_failed: a follower escalates when the group repair failed.
-        "linked_repair_failed": "{name}: Reparatur über verknüpften Guard fehlgeschlagen.",  # noqa: E501
+        "linked_repair_failed": "{name}: Reparatur über verknüpften Guard fehlgeschlagen.",
     },
 }

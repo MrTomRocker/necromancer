@@ -808,8 +808,8 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             return False
         own = self._get_reconfigure_subentry().subentry_id if self._reconfig else None
         return any(
-            sid != own and (se.data.get(CONF_NAME) or se.title or "").strip().casefold()
-            == wanted
+            sid != own
+            and (se.data.get(CONF_NAME) or se.title or "").strip().casefold() == wanted
             for sid, se in self._get_entry().subentries.items()
             if se.subentry_type == SUBENTRY_TYPE_DEVICE
         )
