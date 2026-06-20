@@ -115,6 +115,7 @@ class DeviceEngine:
         self._unsub_timer: Callable[[], None] | None = None
         self._verify_event: asyncio.Event | None = None
         self._cycle_task: asyncio.Task | None = None
+        self._stopping = False
         self._listeners: list[Callable[[], None]] = []
 
         self._apply_persisted(persisted or {})
@@ -208,6 +209,12 @@ class DeviceEngine:
 
     async def async_stop(self) -> None:
         LOGGER.debug("Stopping engine for %s", self.name)
+        # Mark teardown first: the cancelled cycle's finally must NOT escalate
+        # linked partners off a half-finished repair, and our link state is reset
+        # here instead of via a partner notification we are about to skip.
+        self._stopping = True
+        self._following = False
+        self._leader = None
         if self._unsub_health:
             self._unsub_health()
             self._unsub_health = None
@@ -385,9 +392,14 @@ class DeviceEngine:
             return
         self._following = False
         self._leader = None
-        if self._busy():
+        if self._busy() or self._stopping:
             return
-        self.hass.async_create_task(self._validate_after_repair(leader_success=success))
+        # Track the follow-up verify as our cycle task so the busy-guard and
+        # async_stop cover it: a manual recover or a fresh partner-start can't
+        # race a second cycle onto us, and a reload cancels it cleanly.
+        self._cycle_task = self.hass.async_create_task(
+            self._validate_after_repair(leader_success=success)
+        )
 
     async def _validate_after_repair(self, *, leader_success: bool) -> None:
         """Re-check health after a group repair.
@@ -401,22 +413,31 @@ class DeviceEngine:
           cascade into a competing recovery (which would just re-trigger the group) —
           follow the leader's escalation instead.
         """
-        self._set_state(GState.VERIFY)
-        if await self._wait_health_ok(self._int(CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW)):
-            LOGGER.info("%s: healthy after linked-guard repair", self.name)
-            self._recover_success()
-        elif leader_success:
-            LOGGER.info(
-                "%s: still unhealthy after linked repair — own recovery", self.name
-            )
-            self._set_state(GState.OK)
-            self._evaluate()
-        else:
-            LOGGER.warning(
-                "%s: linked repair failed and still unhealthy — escalating", self.name
-            )
-            self._set_state(GState.ESCALATED)
-            self.hass.async_create_task(self._notify("linked_repair_failed"))
+        try:
+            self._set_state(GState.VERIFY)
+            if await self._wait_health_ok(
+                self._int(CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW)
+            ):
+                LOGGER.info("%s: healthy after linked-guard repair", self.name)
+                self._recover_success()
+            elif leader_success:
+                LOGGER.info(
+                    "%s: still unhealthy after linked repair — own recovery", self.name
+                )
+                self._set_state(GState.OK)
+                self._evaluate()
+            else:
+                LOGGER.warning(
+                    "%s: linked repair failed and still unhealthy — escalating",
+                    self.name,
+                )
+                self._set_state(GState.ESCALATED)
+                self.hass.async_create_task(self._notify("linked_repair_failed"))
+        finally:
+            # Clear our cycle slot like _run_recovery_cycle does, so a later
+            # suspect/manual recover can start a fresh cycle (a cancelled verify
+            # unwinds here too, leaving no work on a torn-down engine).
+            self._cycle_task = None
 
     # ---------- health handling ----------
     @callback
@@ -567,7 +588,10 @@ class DeviceEngine:
                     return
         finally:
             self._cycle_task = None
-            self._notify_partners_done(self.state == GState.COOLDOWN)
+            # A stop/unload cancellation must not report a (failed) repair to the
+            # group — that would escalate followers off our half-finished cycle.
+            if not self._stopping:
+                self._notify_partners_done(self.state == GState.COOLDOWN)
 
     async def _wait_health_ok(self, timeout: int) -> bool:
         if self.health.evaluate() == Health.OK:
