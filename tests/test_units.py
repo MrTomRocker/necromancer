@@ -136,7 +136,7 @@ async def test_source_type_and_current_strategy(hass, _):
 
 async def test_build_data_state_switch_check(hass, _):
     step1 = {cf.CONF_NAME: "G", cf.CONF_SOURCE_TYPE: cf.SOURCE_STATE,
-             cf.CONF_MODE: cf.MODE_RECOVER, cf.CONF_ENTITY_ID: "binary_sensor.p",
+             cf.CONF_ENTITY_ID: "binary_sensor.p",
              cf.CONF_ATTRIBUTE: None, cf.CONF_ON_VALUE: ["on"], cf.CONF_OFF_VALUE: ["off"]}
     step2 = {cf.CONF_DEBOUNCE: 30, cf.CONF_COOLDOWN: 60, cf.CONF_BOOT_WINDOW: 90,
              cf.CONF_MAX_ATTEMPTS: 3, cf.CONF_SWITCH_ENTITY: "switch.s",
@@ -150,9 +150,9 @@ async def test_build_data_state_switch_check(hass, _):
 
 async def test_build_data_template_notify(hass, _):
     step1 = {cf.CONF_NAME: "N", cf.CONF_SOURCE_TYPE: cf.SOURCE_TEMPLATE,
-             cf.CONF_MODE: cf.MODE_NOTIFY, cf.CONF_TEMPLATE: "{{ true }}"}
+             cf.CONF_TEMPLATE: "{{ true }}"}
     step2 = {cf.CONF_DEBOUNCE: 30}
-    data = cf._build_data(step1, step2, cf.STRATEGY_SWITCH)
+    data = cf._build_data(step1, step2, cf.MODE_NOTIFY)
     assert data[cf.CONF_HEALTH]["type"] == "template"
     assert data[cf.CONF_DRIVER]["type"] == "noop"
     assert data[cf.CONF_POLICY]["type"] == cf.MODE_NOTIFY
@@ -260,7 +260,7 @@ async def test_flow_rejects_empty_action(hass, _):
     flow._reconfig = False
     flow._strategy = "action"
     flow._step1 = {cf.CONF_NAME: "X", cf.CONF_SOURCE_TYPE: cf.SOURCE_TEMPLATE,
-                   cf.CONF_MODE: cf.MODE_RECOVER, cf.CONF_TEMPLATE: "{{ true }}"}
+                   cf.CONF_TEMPLATE: "{{ true }}"}
     flow._with_link = lambda schema: schema  # avoid needing a real config entry
     captured: dict = {}
     flow.async_show_form = lambda **kw: captured.update(kw) or kw

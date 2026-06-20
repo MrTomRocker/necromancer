@@ -374,11 +374,11 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 ### Strategien (7) + Health-Check-Semantik
 
-- [ ] **ST1 — Strategie-Radio zeigt genau 7** · `P0`
-  - **Prüft:** Der Strategie-Step listet switch / switch_check / action / action_check / actions / actions_check / poe_port in dieser Reihenfolge.
-  - **Files:** `config_flow.py` → `_STRATEGIES` (Z. 118-127), `_strategy_schema` (Z. 354-365).
-  - **Treiber:** Flow starten (`fid=r["flow_id"]`) → `{"source_type":"state_based"}` → device-Step posten mit `{"name":"STseven","mode":"recover","assigned_device":{},"state_check":{"entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]}}`.
-  - **Assert:** `r["step_id"]=="strategy"`; das `strategy`-select hat options `["switch","switch_check","action","action_check","actions","actions_check","poe_port"]` (7 Einträge, genau diese Reihenfolge).
+- [ ] **ST1 — Strategie-Radio zeigt genau 8 (notify + 7), kein Mode-Feld im Device-Step** · `P0`
+  - **Prüft:** Das Mode-Feld (Auto-Reparatur/Nur-benachrichtigen) ist aus dem Device-Step **entfernt**; die Wahl liegt jetzt als erste Option (`notify`) im Strategie-Step, gefolgt von den 7 Recovery-Strategien.
+  - **Files:** `config_flow_helpers/schemas.py` → `_device_schema` (kein `CONF_MODE` mehr), `_strategy_schema` (`options=[MODE_NOTIFY, *_STRATEGIES]`), `_build_data` (`notify_only = strategy == MODE_NOTIFY`); `config_flow.py` → `async_step_strategy`-Dispatch (`MODE_NOTIFY: async_step_notify`).
+  - **Treiber:** Flow starten (`fid=r["flow_id"]`) → `{"source_type":"state_based"}` → device-Step posten mit `{"name":"STseven","assigned_device":{},"state_check":{"entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]}}` (KEIN `mode`).
+  - **Assert:** Device-Step-Schema hat **kein** `mode`-Feld; `r["step_id"]=="strategy"`; das `strategy`-select hat options `["notify","switch","switch_check","action","action_check","actions","actions_check","poe_port"]` (8 Einträge, genau diese Reihenfolge). `notify` wählen → `step_id=="notify"`.
   - **Cleanup:** — (Flow nicht abgeschlossen).
 
 - [ ] **ST2 — switch: off→delay→on Power-Cycle** · `P0`

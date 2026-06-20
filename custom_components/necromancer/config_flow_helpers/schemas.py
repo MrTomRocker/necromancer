@@ -38,7 +38,6 @@ from ..const import (
     CONF_LABEL,
     CONF_LINKED_GUARDS,
     CONF_MAX_ATTEMPTS,
-    CONF_MODE,
     CONF_NOTIFY_ACTION,
     CONF_OFF_ACTION,
     CONF_OFF_ON_DELAY,
@@ -71,7 +70,6 @@ from ..const import (
     IMPORT_MODE_MERGE,
     IMPORT_MODE_REPLACE,
     MODE_NOTIFY,
-    MODE_RECOVER,
     SOURCE_STATE,
     SOURCE_TEMPLATE,
     STRATEGY_ACTION,
@@ -234,15 +232,6 @@ def _device_schema(
         {
             vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): str,
             **_health_section(d, source_type=source_type, exclude=list(exclude)),
-            vol.Required(
-                CONF_MODE, default=d.get(CONF_MODE, MODE_RECOVER)
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[MODE_RECOVER, MODE_NOTIFY],
-                    translation_key="mode",
-                    mode=selector.SelectSelectorMode.LIST,
-                )
-            ),
             **_section(
                 SECTION_DEVICE,
                 {
@@ -261,7 +250,7 @@ def _strategy_schema(default: str) -> vol.Schema:
         {
             vol.Required(CONF_STRATEGY, default=default): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=list(_STRATEGIES),
+                    options=[MODE_NOTIFY, *_STRATEGIES],
                     translation_key="strategy",
                     mode=selector.SelectSelectorMode.LIST,
                 )
@@ -446,7 +435,7 @@ def _build_driver(step2: dict, strategy: str) -> dict:
 def _build_data(step1: dict, step2: dict, strategy: str) -> dict:
     step1 = _flatten_sections(step1)
     step2 = _flatten_sections(step2)
-    notify_only = step1.get(CONF_MODE) == MODE_NOTIFY
+    notify_only = strategy == MODE_NOTIFY
     check = strategy in _CHECK_STRATEGIES or strategy == STRATEGY_POE
     behavior = {
         CONF_DEBOUNCE: int(step2[CONF_DEBOUNCE]),
@@ -483,6 +472,8 @@ def _build_data(step1: dict, step2: dict, strategy: str) -> dict:
 
 
 def _current_strategy(data: dict) -> str:
+    if data.get(CONF_POLICY, {}).get(CONF_TYPE) == MODE_NOTIFY:
+        return MODE_NOTIFY
     driver = data.get(CONF_DRIVER, {})
     dtype = driver.get(CONF_TYPE)
     check = bool(data.get(CONF_BEHAVIOR, {}).get(CONF_HEALTH_CHECK))
@@ -507,13 +498,11 @@ def _watch_defaults(block: dict) -> dict:
 
 def _health_defaults(data: dict) -> dict:
     health = data.get(CONF_HEALTH, {})
-    is_notify = data.get(CONF_POLICY, {}).get(CONF_TYPE) == MODE_NOTIFY
     return {
         CONF_NAME: data.get(CONF_NAME, ""),
         CONF_ENTITY_ID: health.get(CONF_ENTITY_ID),
         CONF_TEMPLATE: health.get(CONF_TEMPLATE, ""),
         **_watch_defaults(health),
-        CONF_MODE: MODE_NOTIFY if is_notify else MODE_RECOVER,
         CONF_DEVICE_ID: data.get(CONF_DEVICE_ID),
     }
 

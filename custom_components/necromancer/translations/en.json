@@ -139,8 +139,7 @@
           "title": "Device & state",
           "description": "Give the device a name and define how its state is detected and what happens on a problem.",
           "data": {
-            "name": "Name",
-            "mode": "Mode"
+            "name": "Name"
           },
           "sections": {
             "state_check": {
@@ -364,14 +363,9 @@
         "template_based": "Jinja template"
       }
     },
-    "mode": {
-      "options": {
-        "recover": "Auto-recovery",
-        "notify": "Notify only"
-      }
-    },
     "strategy": {
       "options": {
+        "notify": "Notify only",
         "switch": "Power-cycle a switch",
         "switch_check": "Power-cycle a switch + health-check",
         "action": "Run an action",

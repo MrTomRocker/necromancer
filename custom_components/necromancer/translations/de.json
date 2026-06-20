@@ -139,8 +139,7 @@
           "title": "Gerät & Zustand",
           "description": "Gib dem Gerät einen Namen und lege fest, woran sein Zustand erkannt wird und was bei einem Problem passieren soll.",
           "data": {
-            "name": "Name",
-            "mode": "Modus"
+            "name": "Name"
           },
           "sections": {
             "state_check": {
@@ -364,14 +363,9 @@
         "template_based": "Jinja-Template"
       }
     },
-    "mode": {
-      "options": {
-        "recover": "Auto-Reparatur",
-        "notify": "Nur benachrichtigen"
-      }
-    },
     "strategy": {
       "options": {
+        "notify": "Nur benachrichtigen",
         "switch": "Schalter aus- und einschalten",
         "switch_check": "Schalter aus-/einschalten + Health-Check",
         "action": "Aktion ausführen",

@@ -4,16 +4,16 @@ The integration is a **single service** entry (added once, blank). Every guarded
 device is a config **subentry** of type `device`, added via "Add device" and
 edited via its "Reconfigure" button.
 
-Recover mode offers seven strategies: power-cycle a `switch`, run one `action`
-sequence, or run an off/on pair of `actions` — each with or without a health
-check — plus `poe_port` (auto-resolve the device to a PoE port by id). The
-health-check variants verify recovery against the device's health entity (the
-engine's VERIFY step); the plain ones assume the action worked. Notify mode just
-observes.
+The strategy step offers eight choices: notify-only (just observe) plus seven
+recovery strategies — power-cycle a `switch`, run one `action` sequence, or an
+off/on pair of `actions` (each with or without a health check), and `poe_port`
+(auto-resolve the device to a PoE port by id). The health-check variants verify
+recovery against the device's health entity (the engine's VERIFY step); the plain
+ones assume the action worked.
 
 The health "what to watch" block — entity + attribute (empty = state) + on/off
-values — lives in the device step. Recover guards are at most 3 steps (device &
-health → strategy → recovery); notify guards are 2.
+values — lives in the device step. Every guard is device & health → strategy →
+final step (a recovery form, or the notify form when notify-only is picked).
 
 PoE ports are a single **flat list** managed via the service's **options flow**
 (add / edit / delete port). Every `poe_port` guard searches that whole list by
@@ -77,7 +77,6 @@ from .const import (
     CONF_IMPORT_MODE,
     CONF_LABEL,
     CONF_LINKED_GUARDS,
-    CONF_MODE,
     CONF_OFF_ACTION,
     CONF_ON_ACTION,
     CONF_POLICY,
@@ -245,8 +244,6 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             else:
                 user_input[CONF_SOURCE_TYPE] = self._source_type
                 self._step1 = user_input
-                if user_input.get(CONF_MODE) == MODE_NOTIFY:
-                    return await self.async_step_notify()
                 return await self.async_step_strategy()
             defaults = user_input
         elif self._reconfig:
@@ -270,6 +267,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             self._strategy = user_input[CONF_STRATEGY]
             return await {
+                MODE_NOTIFY: self.async_step_notify,
                 STRATEGY_SWITCH: self.async_step_switch,
                 STRATEGY_SWITCH_CHECK: self.async_step_switch,
                 STRATEGY_ACTION: self.async_step_action,
@@ -371,9 +369,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         if user_input is not None:
-            return await self._finish(
-                _build_data(self._step1, user_input, STRATEGY_SWITCH)
-            )
+            return await self._finish(_build_data(self._step1, user_input, MODE_NOTIFY))
         d = _behavior_defaults(self._reconfig_data()) if self._reconfig else None
         return self.async_show_form(step_id="notify", data_schema=_notify_schema(d))
 
