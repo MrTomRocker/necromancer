@@ -36,14 +36,20 @@ one of them:
 8. **Shared port recovery is coalesced.** `repair_poe_port` cycles a port via a
    per-port in-flight task, so concurrent callers join one cycle and share its
    result instead of double-cycling.
+9. **Operator snooze suspends cleanly.** A snoozed guard ignores health entirely
+   (no transitions, no alerts), survives a restart (re-arming the *remaining* time),
+   auto-resumes on elapse, and is refused (`ServiceValidationError`) mid-recovery —
+   distinct from auto-off, which still detects and escalates.
 
 ---
 
 ## 2. Level 1 — unit (pure logic / real `hass`)
 
-Fast, deterministic. Three runnable modules cover this level today (run them with
-the dev venv, see §5): **`tests/test_units.py`** (18), **`tests/test_poe.py`** (16),
-**`tests/test_engine.py`** (30). Each row maps to an invariant:
+Fast, deterministic. Three runnable in-process modules cover this level today (run
+them with the dev venv, see §5): **`tests/test_units.py`** (21), **`tests/test_poe.py`**
+(16), **`tests/test_engine.py`** (34). On top sits a **pytest suite on HA's native test
+harness** (`tests/suite/`, run via `pytest tests/components/necromancer/`) that automates
+Level 2 in-process — see §3. Each row maps to an invariant:
 
 | Module | What to assert | Covered by |
 |---|---|---|
@@ -58,7 +64,11 @@ the dev venv, see §5): **`tests/test_units.py`** (18), **`tests/test_poe.py`** 
 
 ## 3. Level 2 — integration (HA test harness or dev container)
 
-Drive the real flows and the engine:
+Most of this is now **automated in `tests/suite/`** — the HA-harness pytest suite
+(`MockConfigEntry` + `subentries_data` → real `async_setup_entry`, platforms, registries):
+config/subentry/options flow (every step + reject path), the view entities, the operator
+services, and per-guard setup isolation. The dev-container REST/WS harness (§5) remains for
+exploratory and true end-to-end live checks. Drive the real flows and the engine:
 
 - **Config flow → engine setup**: each strategy + source type builds a valid
   guard; sections flatten; `poe_port` injects the flat port list.
@@ -100,6 +110,15 @@ Drive the real flows and the engine:
   (status `recovering`→`good`); a second concurrent call **joins the in-flight cycle**
   instead of double-cycling. Verified live end-to-end via a real PoE-bridge outage
   (pull power → linked ping+lamps guards → one cycles the port → both verify OK).
+- **View entities** *(`tests/suite/test_{sensor,binary_sensor,switch,button,event}.py`)*:
+  status (enum + lean attributes), health (connectivity; `UNKNOWN` → `unavailable`),
+  auto-recovery switch (`entity_category: config`, writes through to `auto`), revive
+  button (manual cycle, bypasses debounce), and the recovery `event` (fires
+  `recovered` / `escalated` / `blocked`; absent on notify-only guards).
+- **Operator services** *(`tests/suite/test_services.py`)*: `reset` (clears `ESCALATED`,
+  re-derives); `snooze`/`unsnooze` (→ `SNOOZED`, ignores health, auto-resumes, refused
+  mid-recovery); `snooze_all`/`unsnooze_all` (bulk, no target, busy guards skipped
+  best-effort).
 
 These run today against the dev container by driving the REST/WS flow API and
 asserting on `sensor.*_status` + the error log (see the regression checklist for

@@ -29,3 +29,13 @@ unsnooze:
     entity:
       integration: necromancer
       domain: sensor
+
+snooze_all:
+  fields:
+    duration:
+      required: true
+      example: "01:00:00"
+      selector:
+        duration:
+
+unsnooze_all:

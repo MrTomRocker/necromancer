@@ -61,9 +61,7 @@ class StatusSensor(NecromancerEntity, SensorEntity):
             "attempt": e.attempt,
             "recover_count": e.recover_count,
             "last_recover": e.last_recover,
-            "last_seen": e.last_seen,
             "target": e.driver.target_info(),
-            "auto_restart": e.auto,
             "snooze_until": e._snooze_until,
         }
 

@@ -1091,6 +1091,31 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 
 ---
 
+## Operator-Services & Recovery-Event
+
+> Primär **automatisiert** abgedeckt: `tests/suite/test_services.py` (8) +
+> `tests/suite/test_event.py` (4). Hier die Live-Smoke-Treiber (de-Slugs beachten —
+> Status-Sensor `sensor.<slug>_status`, Event `event.<slug>_wiederbelebung`).
+
+- [ ] **SVC-1 — `reset` löscht ESCALATED** · `P1`
+  - **Prüft:** `necromancer.reset` auf einen eskalierten Guard → `OK`, dann Neu-Bewertung (noch krank → `suspect`, gesund → bleibt `ok`); keine sinnlose Reparatur.
+  - **Treiber:** Guard eskalieren lassen; `N.call("necromancer","reset",entity_id="sensor.<slug>_status")`.
+  - **Assert:** `N.guard("<slug>")[0]` in `("ok","suspect")`; pytest `test_reset_clears_escalation`.
+- [ ] **SVC-2 — `snooze`/`unsnooze`** · `P1`
+  - **Prüft:** `snooze {duration}` → `snoozed`, ignoriert Health (Break → **kein** SUSPECT), `snooze_until`-Attribut; Auto-Resume nach Ablauf; `unsnooze` sofort; **mid-recovery → `ServiceValidationError`**; übersteht Neustart (Restzeit).
+  - **Treiber:** `N.call("necromancer","snooze",entity_id="sensor.<slug>_status",duration={"hours":1})`; Health brechen; Status bleibt `snoozed`.
+  - **Assert:** Status `snoozed`/zurück; pytest `test_snooze_*` / `test_unsnooze_*` / `test_snooze_during_recovery_raises`.
+- [ ] **SVC-3 — `snooze_all`/`unsnooze_all`** · `P1`
+  - **Prüft:** Domain-Service (kein Target) snoozt/entsnoozt **alle** Guards; busy-Guards übersprungen (WARNING `snooze_all: skipped … busy`).
+  - **Treiber:** `N.call("necromancer","snooze_all",duration={"minutes":30})`; alle Status `snoozed`. `unsnooze_all` → alle zurück.
+  - **Assert:** alle `snoozed`/zurück; pytest `test_snooze_all_*`.
+- [ ] **EVT-1 — Recovery-Event** · `P1`
+  - **Prüft:** `event.<slug>_…` feuert `recovered` (Erfolg), `escalated` (Aufgabe nach max_attempts), `blocked` (Pre-Flight, Ziel fehlt). Nur Recover-Guards; notify-only hat keins.
+  - **Treiber:** Erfolg / Eskalation / Block provozieren; `N.st("event.<slug>_…")["attributes"]["event_type"]`.
+  - **Assert:** `event_type` passt; pytest `test_recovered_event` / `test_escalated_event` / `test_blocked_event`.
+
+---
+
 ## Lücken / Ergänzungen (Completeness-Kritiker)
 
 ### Lücken
@@ -1235,7 +1260,7 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Cleanup:** —
 
 - [ ] **GAP-SUITE — Aktuelle Suite-Zählungen stimmen (Doc-Drift gegen Code)** · `P2`
-  - **Prüft:** Die vier Suiten melden die aktuellen Counts (units=18, poe=16, engine=30, integration=8-Checks) — nicht die veralteten 10/15/8/„51".
-  - **Treiber:** je `python tests/test_units.py`, `…/test_poe.py`, `…/test_engine.py`, `…/test_integration.py` (aus `<ha-core>`, PYTHONPATH gesetzt).
-  - **Assert:** Schlusszeilen `18 passed`, `16 passed`, `30 passed`, `8/8 checks passed` (jeweils 0 failed).
+  - **Prüft:** Die vier In-Process-Suiten melden die aktuellen Counts (units=21, poe=16, engine=34, integration=12-Checks); zusätzlich die pytest-Suite `tests/suite/` (72) via `pytest tests/components/necromancer/`.
+  - **Treiber:** je `python tests/test_units.py`, `…/test_poe.py`, `…/test_engine.py`, `…/test_integration.py` (aus `<ha-core>`, PYTHONPATH gesetzt); `<ha-venv>/bin/python -m pytest tests/components/necromancer/`.
+  - **Assert:** Schlusszeilen `21 passed`, `16 passed`, `34 passed`, `12/12 checks passed`, `72 passed` (jeweils 0 failed).
   - **Cleanup:** —

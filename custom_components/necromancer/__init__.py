@@ -16,6 +16,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
@@ -25,6 +26,7 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    ATTR_DURATION,
     ATTR_ID,
     CONF_BEHAVIOR,
     CONF_DEVICE_ID,
@@ -41,6 +43,8 @@ from .const import (
     PLATFORMS,
     SAVE_DELAY,
     SERVICE_REPAIR_POE_PORT,
+    SERVICE_SNOOZE_ALL,
+    SERVICE_UNSNOOZE_ALL,
     STORAGE_VERSION,
     SUBENTRY_TYPE_DEVICE,
 )
@@ -161,6 +165,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
             schema=vol.Schema({vol.Required(ATTR_ID): cv.string}),
         )
 
+    # Bulk "maintenance mode" services (no target — every guard, incl. notify-only).
+    # Re-registered each setup so the handler closes over the current entry's engines.
+    async def _snooze_all(call: ServiceCall) -> None:
+        duration = call.data[ATTR_DURATION]
+        busy: list[str] = []
+        for engine in entry.runtime_data.engines.values():
+            try:
+                engine.snooze(duration)
+            except ServiceValidationError:
+                busy.append(engine.name)  # mid-recovery — best-effort, skip it
+        if busy:
+            LOGGER.warning(
+                "snooze_all: skipped %s guard(s) busy recovering: %s",
+                len(busy),
+                ", ".join(busy),
+            )
+
+    async def _unsnooze_all(call: ServiceCall) -> None:
+        for engine in entry.runtime_data.engines.values():
+            engine.unsnooze()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SNOOZE_ALL,
+        _snooze_all,
+        schema=vol.Schema({vol.Required(ATTR_DURATION): cv.positive_time_period}),
+    )
+    hass.services.async_register(DOMAIN, SERVICE_UNSNOOZE_ALL, _unsnooze_all)
+
     # Guard linking: resolve each guard's group (clique-closed) from the declared
     # links. Only **recover** guards can link (matching the config flow's options),
     # so notify-only guards are excluded from the closure — a guard reconfigured to
@@ -258,7 +291,11 @@ def _reconcile_entities(
     for subentry_id, engine in engines.items():
         if engine.allows_recovery:
             continue
-        for domain, key in (("switch", "auto_restart"), ("button", "recover")):
+        for domain, key in (
+            ("switch", "auto_restart"),
+            ("button", "recover"),
+            ("event", "recovery_event"),
+        ):
             eid = ent_reg.async_get_entity_id(domain, DOMAIN, f"{subentry_id}_{key}")
             if eid is not None:
                 LOGGER.debug("Removing %s (notify-only guard %s)", eid, engine.name)

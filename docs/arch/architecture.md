@@ -85,7 +85,10 @@ health is ignored, no transitions, no alerts (planned maintenance). `snooze` tak
 `duration`, **auto-resumes** when it elapses (the remaining time survives a restart), and is
 refused (`ServiceValidationError`) while a recovery cycle is in flight; a snoozed guard also
 never follows a linked-group repair. Recovering *now* stays the `button.<guard>_revive`,
-arming the `switch.<guard>_auto_recovery`.
+arming the `switch.<guard>_auto_recovery`. `reset`/`snooze`/`unsnooze` are **entity** services
+on the sensor platform (per guard / device / area); `snooze_all` + `unsnooze_all` are
+**domain** services (no target, every guard — "maintenance mode"; busy guards skipped
+best-effort) registered in `__init__` alongside `repair_poe_port`.
 
 Key timing fields (the **behaviour** block):
 
@@ -347,11 +350,17 @@ is no separate "mode" field — the notify-vs-recover choice *is* the strategy c
 
 ## 9. Entities & platforms
 
-Per guard, four pure-view entities (one device per guard, or attached to a linked
-device): `sensor.*_status`, `binary_sensor.*_health`, `switch.*_auto_recovery`,
-`button.*_revive`. Notify-only guards omit the switch and button. Linking to an
-existing device uses the Battery-Notes pattern (`device_info=None` +
+Per recover guard, five pure-view entities (one device per guard, or attached to a
+linked device): `sensor.*_status`, `binary_sensor.*_health`, `switch.*_auto_recovery`
+(`entity_category: config`), `button.*_revive`, and `event.*_recovery` (event types
+`recovered` / `escalated` / `blocked`, fired from `_recover_success` / `_escalate` via
+the engine's `add_event_listener` hook). Notify-only guards omit the switch, button and
+event. Linking to an existing device uses the Battery-Notes pattern (`device_info=None` +
 `entity.device_entry`) so Necromancer never claims ownership of a foreign device.
+
+The status sensor's attributes are intentionally lean — `attempt`, `recover_count`,
+`last_recover`, `target`, `snooze_until`; auto-recovery is the switch (not duplicated as
+an attribute) and "last seen healthy" is left to state history.
 
 **Per-guard services** are registered on the sensor platform via
 `async_register_entity_service` (targeted at `sensor.*_status`; device/area targets
@@ -381,7 +390,8 @@ core/links.py           guard-link grouping (connected components / clique closu
 core/poe.py             PoE fabric: shared id→port resolver, per-port status + coalesced
                    in-flight cycle, repair service
 entity.py          base entity (DeviceInfo, unique_id, link handling)
-sensor/binary_sensor/switch/button.py   the four view entities
+sensor/binary_sensor/switch/button/event.py   the view entities (+ per-guard
+                   services on the sensor platform: reset/snooze/unsnooze)
 core/actions.py         validate + run user action sequences (Script helper)
 core/notify.py          resolve localized message + run the notify action (detached)
 core/health/            base, entity_state, template

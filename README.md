@@ -87,19 +87,65 @@ needs no custom code:
 
 ## What you get per guarded device
 
-Four pure-view entities (on their own device, or attached to an existing device via the
-Battery-Notes link pattern):
+Pure-view entities (on their own device, or attached to an existing device via the
+Battery-Notes link pattern) — recover guards get all five, notify-only guards just the
+status sensor + health:
 
 | Entity | Purpose |
 |---|---|
 | `sensor.<guard>_status` | The lifecycle state: `ok` / `suspect` / `recovering` / `verify` / `cooldown` / `escalated` / `snoozed`. Attributes include `recover_count`, `last_recover` and `snooze_until`. |
 | `binary_sensor.<guard>_health` | The raw health verdict from the HealthSource. |
-| `switch.<guard>_auto_recovery` | Arm/disarm automatic recovery for this guard. |
+| `switch.<guard>_auto_recovery` | Arm/disarm automatic recovery for this guard (a configuration entity). |
 | `button.<guard>_revive` | Trigger a recovery cycle manually. |
+| `event.<guard>_recovery` | Fires on each recovery outcome — `recovered` / `escalated` / `blocked` — for dashboards, automations and history. |
 
 <div align="center">
   <img width="320px" alt="Necromancer guard entities" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/guard_entities.png">
 </div>
+
+### The status sensor — states & attributes
+
+`sensor.<guard>_status` is an enum sensor; its state is where the guard sits in the
+lifecycle:
+
+| State | Meaning |
+|---|---|
+| `ok` | Healthy, watching. |
+| `suspect` | Unhealthy — waiting out the **debounce** before acting (filters blips). |
+| `recovering` | A recovery cycle is running (the driver is acting). |
+| `verify` | Recovery done — waiting (up to the **boot window**) for health to come back. |
+| `cooldown` | Recovered — a short pause before re-arming. |
+| `escalated` | Gave up, or the recovery was blocked — your alarm. |
+| `snoozed` | Operator-suspended (`necromancer.snooze`) — health ignored, no alerts. |
+
+Attributes: `attempt` (retries in the current cycle), `recover_count` (lifetime total),
+`last_recover` (timestamp), `target` (what gets cycled — the switch/port), `snooze_until`
+(when a snooze auto-resumes).
+
+### Recovery events — `event.<guard>_recovery`
+
+Fires once per recovery outcome (with `attempt` / `reason` in the event data):
+
+| Event type | When |
+|---|---|
+| `recovered` | A recovery cycle brought the device back. |
+| `escalated` | Tried `max_attempts` times and it didn't come back — a **device** problem. |
+| `blocked` | Couldn't even *attempt* — the recovery target is missing/unresolvable (switch gone, no PoE-port match, no action). A **config/wiring** problem. |
+
+`escalated` and `blocked` both leave the guard in the `escalated` **state**, so the event
+is the only place that distinction surfaces — handy to alert differently ("fix the config"
+vs "the device is dead").
+
+### The other entities
+
+- `binary_sensor.<guard>_health` — the raw HealthSource verdict (`on` = healthy).
+  `unavailable` when the verdict is UNKNOWN (an `unavailable`/`unknown` source is never a
+  fault — no false alarm).
+- `switch.<guard>_auto_recovery` — arm/disarm automatic recovery (a configuration entity).
+  **Off ≠ snooze:** with auto off the guard still *detects and escalates* (alarms) but
+  won't act; `snooze` goes fully quiet.
+- `button.<guard>_revive` — force a recovery cycle right now, bypassing the debounce and
+  the auto-off gate.
 
 ## Health sources
 
@@ -218,6 +264,8 @@ device, or a whole area (bulk). Recovering *now* and arming auto-recovery stay t
 | `necromancer.reset` | Clear an **escalated** guard back to normal and re-check it — a manual "try again" once you've fixed the root cause (or just to acknowledge the alarm). Still unhealthy → it recovers again; already healthy → it just resumes watching, no needless repair. |
 | `necromancer.snooze` | Suspend a guard for a `duration` — it **ignores health and raises no alerts** (planned maintenance), shows `snoozed`, then **auto-resumes** when the time elapses (the remaining time survives a restart). Unlike turning auto-recovery *off* (which still detects and alarms), snooze goes fully quiet. Refused while a recovery is in flight. |
 | `necromancer.unsnooze` | Resume a snoozed guard immediately instead of waiting for the timer. |
+| `necromancer.snooze_all` | **Maintenance mode for everything** — snooze *every* guard for a `duration` (no target needed), then they all auto-resume. Guards mid-recovery are skipped (best-effort, logged). Handy as a one-tap dashboard button before a disruptive change. |
+| `necromancer.unsnooze_all` | Resume every snoozed guard at once. |
 | `necromancer.repair_poe_port` | Resolve a device `id` (MAC / IP / static label) to its PoE port and power-cycle it. It blocks until done and **coalesces per port** — concurrent callers join the one in-flight cycle instead of each cycling the port. This is the exact primitive Auto-PoE uses — call it from your own actions or automations when you want "reboot whatever is on this device's port". |
 
 ## Recipes

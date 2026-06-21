@@ -136,3 +136,46 @@ async def test_snooze_persisted_in_snapshot(
     snapshot = engine.snapshot()
     assert snapshot["state"] == "snoozed"
     assert snapshot["snooze_until"] is not None
+
+
+async def test_snooze_all_and_unsnooze_all(
+    hass: HomeAssistant, setup_guards: SetupGuards
+) -> None:
+    """snooze_all suspends every guard; unsnooze_all resumes them (no target)."""
+    hass.states.async_set("binary_sensor.guard_health", "on")
+    hass.states.async_set("switch.guard_target", "on")
+    entry = await setup_guards(make_guard("All A"), make_guard("All B"))
+    engines = entry.runtime_data.engines
+
+    await hass.services.async_call(
+        DOMAIN, "snooze_all", {"duration": {"hours": 1}}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert engines["guard0"]._snoozed is True
+    assert engines["guard1"]._snoozed is True
+
+    await hass.services.async_call(DOMAIN, "unsnooze_all", {}, blocking=True)
+    await hass.async_block_till_done()
+    assert engines["guard0"]._snoozed is False
+    assert engines["guard1"]._snoozed is False
+
+
+async def test_snooze_all_skips_busy_guard(
+    hass: HomeAssistant, setup_guards: SetupGuards
+) -> None:
+    """snooze_all is best-effort: a guard mid-recovery is skipped, not raised on."""
+    hass.states.async_set("binary_sensor.guard_health", "on")
+    hass.states.async_set("switch.guard_target", "on")
+    entry = await setup_guards(make_guard("Bz A"), make_guard("Bz B"))
+    engines = entry.runtime_data.engines
+
+    pending = engines["guard1"]._cycle_task = hass.loop.create_future()  # busy
+    try:
+        await hass.services.async_call(
+            DOMAIN, "snooze_all", {"duration": {"hours": 1}}, blocking=True
+        )
+        await hass.async_block_till_done()
+        assert engines["guard0"]._snoozed is True  # free guard snoozed
+        assert engines["guard1"]._snoozed is False  # busy guard skipped
+    finally:
+        pending.cancel()

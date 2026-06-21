@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -35,6 +36,7 @@ class AutoRestartSwitch(NecromancerEntity, SwitchEntity):
 
     _attr_translation_key = "auto_restart"
     _attr_icon = "mdi:auto-fix"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
         super().__init__(engine, subentry_id, "auto_restart")

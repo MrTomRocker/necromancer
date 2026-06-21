@@ -15,8 +15,8 @@ SUBENTRY_TYPE_DEVICE = "device"
 STORAGE_VERSION = 1
 SAVE_DELAY = 5
 
-# Platforms with entities (Phase 1).
-PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "button"]
+# Platforms with entities.
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "button", "event"]
 
 # --- config sections ---
 CONF_HEALTH = "health"
@@ -113,6 +113,9 @@ SERVICE_RESET = "reset"
 SERVICE_SNOOZE = "snooze"
 SERVICE_UNSNOOZE = "unsnooze"
 ATTR_DURATION = "duration"
+# Domain-level bulk services (no target — act on every guard; "maintenance mode").
+SERVICE_SNOOZE_ALL = "snooze_all"
+SERVICE_UNSNOOZE_ALL = "unsnooze_all"
 
 # driver (switch_cycle): power-cycle a switch (off → delay → on)
 CONF_SWITCH_ENTITY = "switch_entity"

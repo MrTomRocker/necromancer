@@ -26,13 +26,14 @@ async def test_status_sensor_reflects_engine_state(
         "attempt",
         "recover_count",
         "last_recover",
-        "last_seen",
         "target",
-        "auto_restart",
+        "snooze_until",
     }
+    # auto_restart (use the switch) and last_seen are intentionally not attributes.
+    assert "auto_restart" not in state.attributes
+    assert "last_seen" not in state.attributes
     assert state.attributes["attempt"] == 0
     assert state.attributes["recover_count"] == 0
-    assert state.attributes["auto_restart"] is True
 
 
 async def test_status_sensor_enum_device_class(

@@ -114,6 +114,8 @@ class DeviceEngine:
         self._stopping = False
         self._last_eval_log: tuple[Health, GState] | None = None
         self._listeners: list[Callable[[], None]] = []
+        # Typed lifecycle events for the event entity: (event_type, data).
+        self._event_listeners: list[Callable[[str, dict], None]] = []
 
         self._apply_persisted(persisted or {})
 
@@ -307,6 +309,21 @@ class DeviceEngine:
     def _emit(self) -> None:
         for cb in list(self._listeners):
             cb()
+
+    def add_event_listener(self, cb: Callable[[str, dict], None]) -> Callable[[], None]:
+        """Subscribe to typed lifecycle events (the event entity). Returns unsub."""
+        self._event_listeners.append(cb)
+
+        def _remove() -> None:
+            if cb in self._event_listeners:
+                self._event_listeners.remove(cb)
+
+        return _remove
+
+    @callback
+    def _fire_event(self, event_type: str, **data: object) -> None:
+        for cb in list(self._event_listeners):
+            cb(event_type, data)
 
     def _set_state(self, state: GState) -> None:
         if state != self.state:
@@ -691,6 +708,9 @@ class DeviceEngine:
             )
         self.attempt = 0
         self._set_state(GState.COOLDOWN)
+        self._fire_event(
+            "recovered", via_link=via_link, recover_count=self.recover_count
+        )
         # A follower that recovered by following a group repair stays silent on
         # success by default (the leader already reported it); opt in per guard.
         # Failures always notify, so silence here means "came back fine".
@@ -721,6 +741,11 @@ class DeviceEngine:
             )
         params.setdefault("attempt", self.attempt)
         self._set_state(GState.ESCALATED)
+        self._fire_event(
+            "blocked" if notify_key == "recovery_blocked" else "escalated",
+            attempt=self.attempt,
+            reason=str(params.get("reason", "")),
+        )
         self.hass.async_create_task(self._notify(notify_key, **params))
 
     async def _notify(self, key: str, **params: object) -> None:
