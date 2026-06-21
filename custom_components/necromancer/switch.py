@@ -22,7 +22,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    for subentry_id, engine in entry.runtime_data.items():
+    for subentry_id, engine in entry.runtime_data.engines.items():
         if not engine.allows_recovery:
             continue  # notify-only guard has nothing to toggle
         async_add_entities(

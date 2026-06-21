@@ -66,7 +66,7 @@ async def test_press_triggers_manual_recovery(
     await hass.services.async_call("button", "press", {"entity_id": eid}, blocking=True)
     await hass.async_block_till_done()
 
-    engine = entry.runtime_data["guard0"]
+    engine = entry.runtime_data.engines["guard0"]
     assert engine.recover_count == 1
 
 
@@ -87,7 +87,7 @@ async def test_press_moves_status_off_ok(
 
     status_eid = entity_id_for(hass, "guard0", "sensor", "status")
     assert hass.states.get(status_eid).state in {"cooldown", "ok"}
-    assert entry.runtime_data["guard0"].recover_count == 1
+    assert entry.runtime_data.engines["guard0"].recover_count == 1
 
 
 @pytest.mark.usefixtures("mock_switch_services")
@@ -105,4 +105,4 @@ async def test_press_bypasses_debounce(
     await hass.services.async_call("button", "press", {"entity_id": eid}, blocking=True)
     await hass.async_block_till_done()
 
-    assert entry.runtime_data["guard0"].recover_count == 1
+    assert entry.runtime_data.engines["guard0"].recover_count == 1

@@ -27,8 +27,8 @@ async def test_setup_builds_one_engine_per_guard(
     entry = await setup_guards(make_guard("A"), make_guard("B"))
 
     assert entry.state is ConfigEntryState.LOADED
-    assert len(entry.runtime_data) == 2
-    assert set(entry.runtime_data) == {"guard0", "guard1"}
+    assert len(entry.runtime_data.engines) == 2
+    assert set(entry.runtime_data.engines) == {"guard0", "guard1"}
 
 
 async def test_repair_poe_port_service_registered(
@@ -57,7 +57,7 @@ async def test_malformed_guard_is_skipped(
         entry = await setup_guards(bad, make_guard("Good"))
 
     assert entry.state is ConfigEntryState.LOADED
-    assert set(entry.runtime_data) == {"guard1"}
+    assert set(entry.runtime_data.engines) == {"guard1"}
     assert "Failed to set up guard" in caplog.text
     assert "Bad" in caplog.text
 

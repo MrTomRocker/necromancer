@@ -3,12 +3,13 @@
 HealthSource -> Engine (RecoveryPolicy) -> RecoveryDriver.
 One config entry = the Necromancer service. Each **guarded device** is a config
 *subentry* (added via "Add device"). One DeviceEngine per subentry lives in
-entry.runtime_data, keyed by subentry_id.
+entry.runtime_data.engines, keyed by subentry_id.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import voluptuous as vol
 
@@ -50,7 +51,23 @@ from .core.links import link_components
 from .core.poe import PoeFabric
 from .core.policies import create_policy
 
-type NecromancerConfigEntry = ConfigEntry[dict[str, DeviceEngine]]
+
+@dataclass
+class NecromancerData:
+    """Typed per-entry runtime state (``entry.runtime_data``).
+
+    One engine per guarded-device subentry, plus the Store + its serializer so
+    unload can flush without a side `hass.data` registry. The PoE fabric and the
+    `name_reset` signal stay in `hass.data[DOMAIN]` on purpose: they outlive a
+    single entry's reload.
+    """
+
+    engines: dict[str, DeviceEngine]
+    store: Store
+    serialize: Callable[[], dict]
+
+
+type NecromancerConfigEntry = ConfigEntry[NecromancerData]
 
 
 def _build_engine(
@@ -203,10 +220,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
             engine.auto,
         )
 
-    entry.runtime_data = engines
-    hass.data.setdefault(DOMAIN, {}).setdefault("stores", {})[entry.entry_id] = (
-        store,
-        _serialize,
+    entry.runtime_data = NecromancerData(
+        engines=engines, store=store, serialize=_serialize
     )
     LOGGER.info("Service set up with %s guarded device(s)", len(engines))
 
@@ -314,16 +329,14 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: NecromancerConfigEntry
 ) -> bool:
     """Unload the service and stop all engines."""
+    data = entry.runtime_data
     # Flush runtime state before tearing down (engines still hold it), so a reload
     # (rename/reconfigure) does not read a stale store.
-    stores = hass.data.get(DOMAIN, {}).get("stores", {})
-    if (info := stores.pop(entry.entry_id, None)) is not None:
-        store, serialize = info
-        await store.async_save(serialize())
+    await data.store.async_save(data.serialize())
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        for engine in entry.runtime_data.values():
+        for engine in data.engines.values():
             await engine.async_stop()
         if (fabric := hass.data.get(DOMAIN, {}).get("fabric")) is not None:
             fabric.shutdown()

@@ -31,7 +31,7 @@ async def test_auto_restart_toggle_writes_through_to_engine(
     entry = await setup_guards(make_guard("Toggle Guard"))
 
     eid = entity_id_for(hass, "guard0", "switch", "auto_restart")
-    engine = entry.runtime_data["guard0"]
+    engine = entry.runtime_data.engines["guard0"]
     assert engine.auto is True
 
     await hass.services.async_call(
@@ -56,7 +56,7 @@ async def test_auto_restart_toggle_idempotent(
     entry = await setup_guards(make_guard("Idem Guard"))
 
     eid = entity_id_for(hass, "guard0", "switch", "auto_restart")
-    engine = entry.runtime_data["guard0"]
+    engine = entry.runtime_data.engines["guard0"]
 
     await hass.services.async_call(
         "switch", "turn_off", {"entity_id": eid}, blocking=True
