@@ -22,14 +22,14 @@ from custom_components.necromancer.config_flow import (
     NecromancerOptionsFlow,
 )
 from custom_components.necromancer.config_flow_helpers import schemas as cf
-from custom_components.necromancer.actions import async_validate
-from custom_components.necromancer.drivers import create_driver
-from custom_components.necromancer.health import create_health
-from custom_components.necromancer.health.base import Health
-from custom_components.necromancer.links import group_of, link_components
+from custom_components.necromancer.core.actions import async_validate
+from custom_components.necromancer.core.drivers import create_driver
+from custom_components.necromancer.core.health import create_health
+from custom_components.necromancer.core.health.base import Health
+from custom_components.necromancer.core.links import group_of, link_components
 
 
-# ---------------- health/entity_state ----------------
+# ---------------- core/health/entity_state ----------------
 
 
 async def test_entity_state_on_off_unknown(hass, _):
@@ -70,7 +70,7 @@ async def test_entity_state_legacy_healthy_state(hass, _):
     assert h.evaluate() is Health.UNHEALTHY
 
 
-# ---------------- health/template ----------------
+# ---------------- core/health/template ----------------
 
 
 async def test_template_boolean_and_unknown(hass, _):
@@ -304,7 +304,7 @@ async def test_own_guard_entities_only_self(hass, _):
 
 
 async def test_notify_resolve_tts_and_event_text(hass, _):
-    from custom_components.necromancer.notify import _resolve
+    from custom_components.necromancer.core.notify import _resolve
 
     # TTS: number as "von", not a slash; message = "name: text", event_text = text only
     msg, ev = _resolve("de", "G", "recovery_attempt", {"attempt": 1, "max": 2})
@@ -324,8 +324,8 @@ async def test_notify_resolve_tts_and_event_text(hass, _):
 
 async def test_policy_reasons(hass, _):
     from custom_components.necromancer.const import REASON_AUTO_OFF, REASON_OBSERVE
-    from custom_components.necromancer.policies.notify import NotifyPolicy
-    from custom_components.necromancer.policies.standard import StandardPolicy
+    from custom_components.necromancer.core.policies.notify import NotifyPolicy
+    from custom_components.necromancer.core.policies.standard import StandardPolicy
 
     assert StandardPolicy({}).should_attempt(auto_enabled=True) == (True, "")
     assert StandardPolicy({}).should_attempt(auto_enabled=False) == (False, REASON_AUTO_OFF)

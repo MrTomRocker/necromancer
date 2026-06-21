@@ -1,6 +1,6 @@
 """Recovery driver: auto-resolve a device to its PoE port, then power-cycle it.
 
-`poe_port` is a thin strategy adapter over the shared **PoE fabric** (`poe.py`):
+`poe_port` is a thin strategy adapter over the shared **PoE fabric** (`core/poe.py`):
 the guard carries an `expected_id` (MAC, hostname, neighbour, or a static label),
 and the fabric owns the port list, the id→port resolution (live match → last-known
 cache → ambiguous/none), the staged power-cycle, the per-port lock and status. So
@@ -15,7 +15,7 @@ back (its staged verify).
 
 from __future__ import annotations
 
-from ..const import CONF_EXPECTED_ID, DOMAIN, LOGGER
+from ...const import CONF_EXPECTED_ID, DOMAIN, LOGGER
 from .base import RecoveryDriver
 
 

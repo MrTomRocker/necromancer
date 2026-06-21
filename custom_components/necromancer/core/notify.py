@@ -22,8 +22,8 @@ import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
 
+from ..const import LOGGER, NOTIFY_MESSAGES
 from .actions import async_run
-from .const import LOGGER, NOTIFY_MESSAGES
 
 
 def _resolve(lang: str, name: str, key: str, params: dict) -> tuple[str, str]:

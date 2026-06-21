@@ -7,7 +7,7 @@ and the gates (time_window/rate_limit/dependency) arrive later.
 
 from __future__ import annotations
 
-from ..const import REASON_AUTO_OFF
+from ...const import REASON_AUTO_OFF
 
 
 class RecoveryPolicy:

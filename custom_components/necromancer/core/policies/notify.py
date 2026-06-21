@@ -6,7 +6,7 @@ engine routes a confirmed problem straight to ESCALATED (with a notification).
 
 from __future__ import annotations
 
-from ..const import REASON_OBSERVE
+from ...const import REASON_OBSERVE
 from .base import RecoveryPolicy
 
 

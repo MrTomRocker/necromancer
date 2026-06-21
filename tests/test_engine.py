@@ -19,11 +19,11 @@ from homeassistant.util import dt as dt_util
 
 from tests.common import async_fire_time_changed, async_test_home_assistant
 
-from custom_components.necromancer.drivers.base import RecoveryDriver
-from custom_components.necromancer.engine import DeviceEngine, GState
-from custom_components.necromancer.health.base import Health, HealthSource
-from custom_components.necromancer.policies.notify import NotifyPolicy
-from custom_components.necromancer.policies.standard import StandardPolicy
+from custom_components.necromancer.core.drivers.base import RecoveryDriver
+from custom_components.necromancer.core.engine import DeviceEngine, GState
+from custom_components.necromancer.core.health.base import Health, HealthSource
+from custom_components.necromancer.core.policies.notify import NotifyPolicy
+from custom_components.necromancer.core.policies.standard import StandardPolicy
 
 
 class FakeHealth(HealthSource):

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import voluptuous as vol
 
+from ...const import CONF_ACTION, LOGGER
 from ..actions import async_run, async_validate, static_errors
-from ..const import CONF_ACTION, LOGGER
 from .base import RecoveryDriver
 
 

@@ -153,12 +153,12 @@ DEFAULT_HEALTHY_STATE = "on"
 DEFAULT_OFF_ON_DELAY = 5
 DEFAULT_RELOAD_DELAY = 10
 
-# User-facing notification texts = the `event_text` (no name prefix; notify.py
+# User-facing notification texts = the `event_text` (no name prefix; core/notify.py
 # prepends "<name>: " to build `message`). Phrased for TTS: numbers as words
 # ("1 von 2", not "1/2"), no slashes/parentheses, plural-correct via `{attempts}`
-# (computed in notify.py). str.format vars: {attempt}, {max}, {attempts}.
+# (computed in core/notify.py). str.format vars: {attempt}, {max}, {attempts}.
 # Kept in code rather than strings.json because Home Assistant's translation schema
-# has no "notify" category; notify.py picks the language with an English fallback.
+# has no "notify" category; core/notify.py picks the language with an English fallback.
 NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
     "en": {
         "recovery_attempt": "Recovery attempt {attempt} of {max}.",

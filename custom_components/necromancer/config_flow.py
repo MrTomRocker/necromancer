@@ -105,7 +105,7 @@ from .const import (
     STRATEGY_SWITCH_CHECK,
     SUBENTRY_TYPE_DEVICE,
 )
-from .links import group_of
+from .core.links import group_of
 
 
 class NecromancerConfigFlow(ConfigFlow, domain=DOMAIN):

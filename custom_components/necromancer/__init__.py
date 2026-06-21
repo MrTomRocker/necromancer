@@ -43,12 +43,12 @@ from .const import (
     STORAGE_VERSION,
     SUBENTRY_TYPE_DEVICE,
 )
-from .drivers import create_driver
-from .engine import DeviceEngine
-from .health import create_health
-from .links import link_components
-from .poe import PoeFabric
-from .policies import create_policy
+from .core.drivers import create_driver
+from .core.engine import DeviceEngine
+from .core.health import create_health
+from .core.links import link_components
+from .core.poe import PoeFabric
+from .core.policies import create_policy
 
 type NecromancerConfigEntry = ConfigEntry[dict[str, DeviceEngine]]
 

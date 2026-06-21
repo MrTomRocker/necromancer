@@ -10,9 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NecromancerConfigEntry
-from .engine import DeviceEngine
+from .core.engine import DeviceEngine
+from .core.health import Health
 from .entity import NecromancerEntity
-from .health import Health
 
 
 async def async_setup_entry(

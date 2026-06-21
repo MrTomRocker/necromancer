@@ -56,7 +56,7 @@ picker by type (it would offer both services for every “Add” button).
 
 ## 3. The engine state machine
 
-`engine.py` runs a fixed state machine per guard. States
+`core/engine.py` runs a fixed state machine per guard. States
 (`sensor.<guard>_status`):
 
 ```
@@ -122,7 +122,7 @@ keeps its last-known fallback port across a reboot. The display entities
 
 ---
 
-## 4. Health sources (`health/`)
+## 4. Health sources (`core/health/`)
 
 `evaluate() -> Health` is always callable (so the VERIFY step can re-check). A
 source that tracks something other than entity states registers its own listener
@@ -144,7 +144,7 @@ The wizard’s first step picks the source type (`state_based` / `template_based
 
 ---
 
-## 5. Recovery drivers (`drivers/`)
+## 5. Recovery drivers (`core/drivers/`)
 
 `recover()` performs the repair; `can_recover()` is a pre-flight guard that blocks
 (→ `recovery_blocked`, no blind action) when something is missing.
@@ -158,7 +158,7 @@ The wizard’s first step picks the source type (`state_based` / `template_based
 | `noop` | Nothing (used by notify-only guards). | — |
 
 User actions are validated (`cv.SCRIPT_SCHEMA` + `async_validate_actions_config`)
-and run via the `Script` helper (`actions.py`), blocking for recovery, detached
+and run via the `Script` helper (`core/actions.py`), blocking for recovery, detached
 for notifications.
 
 ### The strategy matrix
@@ -197,7 +197,7 @@ the fabric (not per guard) and is persisted in the Store under `_poe_cache`; the
 The `poe_port` driver cycles a port from *inside* a guard. Some recoveries instead
 need to cycle a port from an **action** — e.g. cut PoE, wait for ping, then *reload*
 a config entry (the lamps only return after the reload), a sequence a driver can't
-express. The **PoE fabric** (`poe.py`) is that shared, port-level primitive: a
+express. The **PoE fabric** (`core/poe.py`) is that shared, port-level primitive: a
 domain-singleton holding the live + last-known `id → port` map (same resolution as
 `poe_port`, watching every port's id-entity), a per-port **status**
 (`good` / `recovering` / `failed`) and a per-port **in-flight cycle**. It backs the
@@ -219,7 +219,7 @@ follow — e.g. a *ping* guard and a *lamps-unavailable* guard on the same Hue b
 
 - **Declaration & closure.** Every recover guard has a collapsed *Linked guards*
   multi-select (`linked_guards` = partner subentry_ids). The relation is
-  **undirected + clique-closed**: `links.py` (`link_components`) builds connected
+  **undirected + clique-closed**: `core/links.py` (`link_components`) builds connected
   components over the union of all declarations, so a one-sided link still reads and
   behaves as a full mutual group. The config flow reads the closure for the form
   default; `__init__` reads it to give each engine its effective partners. Only
@@ -229,7 +229,7 @@ follow — e.g. a *ping* guard and a *lamps-unavailable* guard on the same Hue b
   (`_apply_link_removals`), so the only way out of a group is to clear *all* its
   partners (a single shared partner re-forms the clique).
 - **Coordination.** When a guard starts recovery the engine calls `self.links.notify_start()`
-  (`LinkCoordinator` in `links.py`), which calls each partner's coordinator
+  (`LinkCoordinator` in `core/links.py`), which calls each partner's coordinator
   (`peer.links.on_partner_repair_start`) **and** fires a `necromancer_guard_repair` bus event
   for outside automations). A partner that isn't already busy enters a **follow hold**
   (RECOVERING, no own action) and suppresses its own health-driven transitions. When
@@ -273,7 +273,7 @@ exposes it to the action as Jinja variables:
 | `attempt` / `max` / `attempts` / `reason` | Event params, where applicable. `attempts` is the plural-correct phrase ("1 Versuch" / "3 Versuche"). |
 
 The texts (`NOTIFY_MESSAGES` in `const.py`) are the **name-less** `event_text`;
-`notify.py` (`_resolve`) prepends `"<name>: "` for `message` and computes `attempts`.
+`core/notify.py` (`_resolve`) prepends `"<name>: "` for `message` and computes `attempts`.
 They're phrased for **TTS** — numbers as words ("1 von 2", not "1/2"), no
 slashes/parentheses. So `message: "{{ message }}"` just works; the user decides
 whether/how to notify. The action runs **detached** so a user delay never stalls
@@ -351,25 +351,25 @@ existing device uses the Battery-Notes pattern (`device_info=None` +
 __init__.py        setup: build one DeviceEngine per device subentry, inject
                    ports into poe_port guards, resolve link groups, wire the PoE
                    fabric + repair_poe_port service, reconcile devices/entities, Store
-engine.py          the state machine, timing, persistence, health wiring (delegates
+core/engine.py          the state machine, timing, persistence, health wiring (delegates
                    linking to LinkCoordinator)
-state.py           the GState enum (re-exported by engine.py)
+core/state.py           the GState enum (re-exported by core/engine.py)
 config_flow.py     service + device-subentry + options(ports) flow handler classes
                    (must stay a file — hassfest)
 config_flow_helpers/   schemas.py (all schema/section builders, _build_data, YAML
                    port import/export) + selectors.py (reactive Live* selectors)
 const.py           keys, defaults, strategy/source constants
-links.py           guard-link grouping (connected components / clique closure) +
+core/links.py           guard-link grouping (connected components / clique closure) +
                    LinkCoordinator: per-engine runtime link protocol (start/hold/verify)
-poe.py             PoE fabric: shared id→port resolver, per-port status + coalesced
+core/poe.py             PoE fabric: shared id→port resolver, per-port status + coalesced
                    in-flight cycle, repair service
 entity.py          base entity (DeviceInfo, unique_id, link handling)
 sensor/binary_sensor/switch/button.py   the four view entities
-actions.py         validate + run user action sequences (Script helper)
-notify.py          resolve localized message + run the notify action (detached)
-health/            base, entity_state, template
-drivers/           base, noop, switch_cycle, action_call, action_cycle, poe_port
-policies/          base, standard, notify
+core/actions.py         validate + run user action sequences (Script helper)
+core/notify.py          resolve localized message + run the notify action (detached)
+core/health/            base, entity_state, template
+core/drivers/           base, noop, switch_cycle, action_call, action_cycle, poe_port
+core/policies/          base, standard, notify
 ```
 
 ---

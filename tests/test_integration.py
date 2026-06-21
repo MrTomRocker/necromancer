@@ -22,11 +22,11 @@ from homeassistant.util import dt as dt_util
 from tests.common import async_fire_time_changed, async_test_home_assistant
 
 from custom_components.necromancer.const import DOMAIN
-from custom_components.necromancer.drivers.poe_port import PoePortDriver
-from custom_components.necromancer.engine import DeviceEngine, GState
-from custom_components.necromancer.health import create_health
-from custom_components.necromancer.poe import PoeFabric
-from custom_components.necromancer.policies.standard import StandardPolicy
+from custom_components.necromancer.core.drivers.poe_port import PoePortDriver
+from custom_components.necromancer.core.engine import DeviceEngine, GState
+from custom_components.necromancer.core.health import create_health
+from custom_components.necromancer.core.poe import PoeFabric
+from custom_components.necromancer.core.policies.standard import StandardPolicy
 
 results: list[tuple[str, bool, str]] = []
 findings: list[str] = []
@@ -160,7 +160,7 @@ async def test_poe_bogus_id_blocks_no_blind(hass, cap):
     hass.data.setdefault(DOMAIN, {})["fabric"] = fabric
     drv = PoePortDriver(hass, {CONF_TYPE: "poe_port", CONF_EXPECTED_ID: "BOGUS-XYZ"})
 
-    from custom_components.necromancer.health.base import Health, HealthSource
+    from custom_components.necromancer.core.health.base import Health, HealthSource
 
     class FH(HealthSource):
         @property

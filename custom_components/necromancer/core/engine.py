@@ -22,7 +22,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from ..const import (
     CONF_AUTO_RESTART,
     CONF_BOOT_WINDOW,
     CONF_COOLDOWN,

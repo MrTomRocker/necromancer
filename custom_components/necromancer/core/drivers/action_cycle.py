@@ -12,14 +12,14 @@ import asyncio
 
 import voluptuous as vol
 
-from ..actions import async_run, async_validate, static_errors
-from ..const import (
+from ...const import (
     CONF_OFF_ACTION,
     CONF_OFF_ON_DELAY,
     CONF_ON_ACTION,
     DEFAULT_OFF_ON_DELAY,
     LOGGER,
 )
+from ..actions import async_run, async_validate, static_errors
 from .base import RecoveryDriver
 
 

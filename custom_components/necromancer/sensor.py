@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NecromancerConfigEntry
-from .engine import DeviceEngine, GState
+from .core.engine import DeviceEngine, GState
 from .entity import NecromancerEntity
 
 

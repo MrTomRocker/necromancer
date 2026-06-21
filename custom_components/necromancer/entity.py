@@ -19,7 +19,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
-from .engine import DeviceEngine
+from .core.engine import DeviceEngine
 
 
 class NecromancerEntity(Entity):

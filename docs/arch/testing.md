@@ -47,14 +47,14 @@ the dev venv, see §5): **`tests/test_units.py`** (18), **`tests/test_poe.py`** 
 
 | Module | What to assert | Covered by |
 |---|---|---|
-| `health/entity_state.py` | value-list mapping → OK/UNHEALTHY/UNKNOWN; unavailable/unknown → UNKNOWN; explicit-off-wins; legacy `healthy_state` fallback. | `test_units` |
-| `health/template.py` | `result_as_boolean` cases (`true/false/on/0/'on'`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. | `test_units` |
-| `drivers/*.can_recover` | missing switch / missing+invalid action → `(False, reason)`; the poe_port adapter blocks on no/ambiguous match. | `test_units`, `test_poe` |
+| `core/health/entity_state.py` | value-list mapping → OK/UNHEALTHY/UNKNOWN; unavailable/unknown → UNKNOWN; explicit-off-wins; legacy `healthy_state` fallback. | `test_units` |
+| `core/health/template.py` | `result_as_boolean` cases (`true/false/on/0/'on'`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. | `test_units` |
+| `core/drivers/*.can_recover` | missing switch / missing+invalid action → `(False, reason)`; the poe_port adapter blocks on no/ambiguous match. | `test_units`, `test_poe` |
 | `config_flow` helpers | `_flatten_sections` (nested→flat), `_as_list`, `_build_data` (health block per source type, behaviour per check), `_current_strategy`, `_source_type_of`. | `test_units` |
 | `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / `null` / list-of-scalar / malformed YAML / non-numeric **or negative** timing; trim, scalar→list, missing/empty status→default, int→str. `_ports_to_yaml` round-trips; import **merge** = upsert by `label`, **replace** = overwrite. | `test_units` |
-| `actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. | `test_units` |
-| `links.py` | `link_components` / `group_of`: undirected union → connected components (clique closure); transitive (A–B, B–C ⇒ `{A,B,C}`); a one-sided link reads symmetric; stale ids dropped. | `test_units` |
-| `poe.py` (fabric) + `poe_port` driver | `resolve_with_reason`: one live match wins (refreshes cache) → last-known cache → ambiguous/none with a reason; `repair` sets status `recovering`→`good`/`failed`, with concurrent callers **coalescing** onto one in-flight cycle (`test_concurrent_callers_coalesce`); a status change fires `necromancer_poe_port`; the `poe_port` driver delegates resolve+cycle to the fabric (one cache, one cycle, **shared with the service** — `test_driver_and_service_coalesce`). | `test_poe` |
+| `core/actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. | `test_units` |
+| `core/links.py` | `link_components` / `group_of`: undirected union → connected components (clique closure); transitive (A–B, B–C ⇒ `{A,B,C}`); a one-sided link reads symmetric; stale ids dropped. | `test_units` |
+| `core/poe.py` (fabric) + `poe_port` driver | `resolve_with_reason`: one live match wins (refreshes cache) → last-known cache → ambiguous/none with a reason; `repair` sets status `recovering`→`good`/`failed`, with concurrent callers **coalescing** onto one in-flight cycle (`test_concurrent_callers_coalesce`); a status change fires `necromancer_poe_port`; the `poe_port` driver delegates resolve+cycle to the fabric (one cache, one cycle, **shared with the service** — `test_driver_and_service_coalesce`). | `test_poe` |
 
 ## 3. Level 2 — integration (HA test harness or dev container)
 

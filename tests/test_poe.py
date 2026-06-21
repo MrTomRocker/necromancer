@@ -38,8 +38,8 @@ from custom_components.necromancer.const import (
     CONF_TYPE,
     DOMAIN,
 )
-from custom_components.necromancer.drivers.poe_port import PoePortDriver
-from custom_components.necromancer.poe import (
+from custom_components.necromancer.core.drivers.poe_port import PoePortDriver
+from custom_components.necromancer.core.poe import (
     EVENT_PORT_STATUS,
     PORT_GOOD,
     PORT_RECOVERING,

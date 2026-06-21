@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
-from ..const import CONF_OFF_ON_DELAY, CONF_SWITCH_ENTITY, DEFAULT_OFF_ON_DELAY, LOGGER
+from ...const import CONF_OFF_ON_DELAY, CONF_SWITCH_ENTITY, DEFAULT_OFF_ON_DELAY, LOGGER
 from .base import RecoveryDriver
 
 

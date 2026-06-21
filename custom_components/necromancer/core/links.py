@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
-from .const import CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW, EVENT_GUARD_REPAIR, LOGGER
+from ..const import CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW, EVENT_GUARD_REPAIR, LOGGER
 from .health import Health
 from .state import GState
 

@@ -17,7 +17,7 @@ from collections.abc import Callable
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import (
+from ..const import (
     CONF_ACTUATOR,
     CONF_ID_ATTRIBUTE,
     CONF_ID_ENTITY,
