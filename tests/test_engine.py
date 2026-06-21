@@ -615,6 +615,36 @@ async def test_reload_device_entry_on_repair(hass, _):
         hass.config_entries.async_reload = orig
 
 
+async def test_follower_success_notify_gated(hass, _):
+    notified: list[str] = []
+
+    async def _rec(key, **kw):
+        notified.append(key)
+
+    # follower (via_link) + flag off (default) -> silent on success
+    eng = make(hass, FakeHealth(hass), StubDriver(hass))
+    eng._notify = _rec
+    eng._recover_success(via_link=True)
+    await hass.async_block_till_done()
+    assert "recovery_success" not in notified, notified
+
+    # follower (via_link) + flag on -> notifies
+    notified.clear()
+    eng2 = make(hass, FakeHealth(hass), StubDriver(hass), notify_follower_success=True)
+    eng2._notify = _rec
+    eng2._recover_success(via_link=True)
+    await hass.async_block_till_done()
+    assert "recovery_success" in notified, notified
+
+    # leader / independent recovery (not via_link) -> always notifies
+    notified.clear()
+    eng3 = make(hass, FakeHealth(hass), StubDriver(hass))
+    eng3._notify = _rec
+    eng3._recover_success()
+    await hass.async_block_till_done()
+    assert "recovery_success" in notified, notified
+
+
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 

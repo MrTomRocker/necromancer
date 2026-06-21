@@ -236,7 +236,11 @@ follow — e.g. a *ping* guard and a *lamps-unavailable* guard on the same Hue b
   the leader finishes (`self.links.notify_done(success)` → each partner's
   `on_partner_repair_done`), each follower re-validates (`validate_after_repair`):
   - healthy → it settles through the **same `_recover_success` path** (cooldown +
-    stats) as the leader, instead of snapping back to OK;
+    stats) as the leader, instead of snapping back to OK — but called with
+    `via_link=True`, so its `recovery_success` **notification is suppressed by
+    default** (one root-cause repair → one success push, the leader's). Opt in per
+    guard with `behavior.notify_follower_success` (a toggle in the *Linked guards*
+    section). The `necromancer_guard_repair` event still fires per guard regardless;
   - still unhealthy **and the leader succeeded** → only the follower's device is
     still down, so it falls back to its own recovery;
   - still unhealthy **and the leader failed** → the shared cause is unfixed, so the

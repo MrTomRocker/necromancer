@@ -156,11 +156,11 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Assert:** Genau ein Guard zeigt `"debounce elapsed, starting recovery"`; der andere `"already repairing — following instead"` (engine) oder `"linked guard is repairing — following (hold, verify after)"` (links). Nur **ein** Recovery-Driver-Aufruf insgesamt.
   - **Cleanup:** `N.delete_subentry(*s2); N.delete_subentry(*s1)`
 
-- [ ] **LINK-4 — Follower-Erfolg → COOLDOWN + Event `necromancer_guard_repair`** · `P1`
-  - **Prüft:** Ein erfolgreich „mitgeheilter" Follower durchläuft denselben Erfolgspfad (COOLDOWN, `recover_count++`); der Leader feuert `necromancer_guard_repair` (phase start/done).
-  - **Files:** `links.py:185` → `validate_after_repair` (healthy → `_recover_success`); `links.py:106`/`:118` → `notify_start`/`notify_done` (feuern `EVENT_GUARD_REPAIR` mit `phase`/`success`); `const.py:49` → `EVENT_GUARD_REPAIR = f"{DOMAIN}_guard_repair"` (= `"necromancer_guard_repair"`).
-  - **Treiber:** LINK-2-Setup. Nach dem Lauf `N.guard("linkb")` und `N.guard("linka")` lesen.
-  - **Assert:** Beide Status-Sensoren `cooldown`→`ok`, beide `recover_count=1`; `"recovered after"` erscheint genau einmal (beim Leader, egal welcher der beiden) und kein Doppel-Notify beim Follower.
+- [ ] **LINK-4 — Follower-Erfolg → COOLDOWN + Event; Follower-Erfolg-Notify standardmäßig still** · `P1`
+  - **Prüft:** Ein erfolgreich „mitgeheilter" Follower durchläuft denselben Erfolgspfad (COOLDOWN, `recover_count++`) und feuert weiter das `necromancer_guard_repair`-Event — aber **kein** `recovery_success`-Notify (Push), außer der Guard hat `behavior.notify_follower_success` an (Checkbox in der Verknüpfte-Guards-Section). Misserfolg (`linked_repair_failed`) meldet immer.
+  - **Files:** `links.py:185` → `validate_after_repair` (healthy → `_recover_success(via_link=True)`); `engine.py` → `_recover_success(via_link)` (Notify nur wenn `not via_link or behavior.notify_follower_success`); `config_flow_helpers/schemas.py` → `_link_section` (BooleanSelector `notify_follower_success`), `_build_data` (speichert Flag in behavior); `links.py:106`/`:118` → `notify_start`/`notify_done` (`EVENT_GUARD_REPAIR`).
+  - **Treiber:** LINK-2-Setup (Default: Flag aus). Variante B: Follower mit `notify_follower_success=true` rekonfigurieren.
+  - **Assert:** Default: beide Status-Sensoren `cooldown`→`ok`, beide `recover_count=1`, `necromancer_guard_repair` pro Guard gefeuert, aber Follower-`recovery_success`-Notify **fehlt** (nur Leader meldet). Variante B: Follower meldet auch `recovery_success`. Automatisiert: `test_engine.py::test_follower_success_notify_gated`.
   - **Cleanup:** `N.delete_subentry(*s2); N.delete_subentry(*s1)`
 
 - [ ] **LINK-5 — Leader scheitert + Follower noch krank → Follower eskaliert (kein Kaskaden-Recovery)** · `P1`

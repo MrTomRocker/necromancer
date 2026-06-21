@@ -138,6 +138,10 @@ CONF_NOTIFY_ACTION = "notify_action"
 # the just-repaired device time to come up before HA reconnects to it.
 CONF_RELOAD_ENTRY = "reload_entry"
 CONF_RELOAD_DELAY = "reload_delay"
+# A follower that recovers by following a group repair is silent on success by
+# default (one root-cause repair -> one notification, the leader's). Opt in per
+# guard to also notify the follower's success. Failures always notify.
+CONF_NOTIFY_FOLLOWER_SUCCESS = "notify_follower_success"
 
 # defaults (seconds, except counts/bools)
 DEFAULT_DEBOUNCE = 120

@@ -31,6 +31,7 @@ from .const import (
     CONF_HEALTH_CHECK,
     CONF_MAX_ATTEMPTS,
     CONF_NOTIFY_ACTION,
+    CONF_NOTIFY_FOLLOWER_SUCCESS,
     CONF_RELOAD_DELAY,
     CONF_RELOAD_ENTRY,
     DEFAULT_AUTO_RESTART,
@@ -567,7 +568,7 @@ class DeviceEngine:
         finally:
             self._verify_event = None
 
-    def _recover_success(self) -> None:
+    def _recover_success(self, *, via_link: bool = False) -> None:
         self.recover_count += 1
         self.last_recover = dt_util.utcnow()
         LOGGER.info(
@@ -578,7 +579,11 @@ class DeviceEngine:
         )
         self.attempt = 0
         self._set_state(GState.COOLDOWN)
-        self.hass.async_create_task(self._notify("recovery_success"))
+        # A follower that recovered by following a group repair stays silent on
+        # success by default (the leader already reported it); opt in per guard.
+        # Failures always notify, so silence here means "came back fine".
+        if not via_link or self.behavior.get(CONF_NOTIFY_FOLLOWER_SUCCESS):
+            self.hass.async_create_task(self._notify("recovery_success"))
         self._cancel_timer()
         self._unsub_timer = async_call_later(
             self.hass, self._int(CONF_COOLDOWN, DEFAULT_COOLDOWN), self._cooldown_done

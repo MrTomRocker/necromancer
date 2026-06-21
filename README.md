@@ -174,6 +174,11 @@ alone they'd both power-cycle the same port. Link them into a **group** instead 
   **still unhealthy** decides by the leader's result: if the leader *succeeded*, only that
   follower's own device is still down, so it runs its own recovery; if the leader *failed*, the
   shared cause is unfixed, so the follower escalates too instead of piling on.
+- **Follower notifications.** A follower that recovers *by following the group* is **silent on
+  success** by default — one root-cause repair should send one success notification (the leader's),
+  not a burst of identical ones. Tick *Report success even when this guard follows a group repair*
+  in the *Linked guards* section if you want per-device confirmation. A follower that **fails** to
+  recover always notifies (`linked_repair_failed`).
 - A follower with **auto-recovery off** doesn't follow — if its device is affected it escalates,
   same as any auto-off guard. Off stays off.
 

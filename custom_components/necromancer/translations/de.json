@@ -201,7 +201,8 @@
               "name": "Verknüpfte Guards",
               "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
               "data": {
-                "linked_guards": "Guards in dieser Gruppe"
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
               }
             },
             "reload": {
@@ -242,7 +243,8 @@
               "name": "Verknüpfte Guards",
               "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
               "data": {
-                "linked_guards": "Guards in dieser Gruppe"
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
               }
             },
             "reload": {
@@ -285,7 +287,8 @@
               "name": "Verknüpfte Guards",
               "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
               "data": {
-                "linked_guards": "Guards in dieser Gruppe"
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
               }
             },
             "reload": {
@@ -326,7 +329,8 @@
               "name": "Verknüpfte Guards",
               "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
               "data": {
-                "linked_guards": "Guards in dieser Gruppe"
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
               }
             },
             "reload": {

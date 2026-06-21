@@ -79,6 +79,7 @@ from .const import (
     CONF_IMPORT_MODE,
     CONF_LABEL,
     CONF_LINKED_GUARDS,
+    CONF_NOTIFY_FOLLOWER_SUCCESS,
     CONF_OFF_ACTION,
     CONF_ON_ACTION,
     CONF_POLICY,
@@ -203,7 +204,16 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
 
     def _with_link(self, schema: vol.Schema) -> vol.Schema:
         """Append the collapsed link section to a recover-strategy schema."""
-        section_dict = _link_section(self._link_options(), self._linked_default())
+        notify_success = (
+            self._reconfig_data()
+            .get(CONF_BEHAVIOR, {})
+            .get(CONF_NOTIFY_FOLLOWER_SUCCESS, False)
+            if self._reconfig
+            else False
+        )
+        section_dict = _link_section(
+            self._link_options(), self._linked_default(), notify_success=notify_success
+        )
         return schema.extend(section_dict) if section_dict else schema
 
     def _reload_block(self) -> dict:

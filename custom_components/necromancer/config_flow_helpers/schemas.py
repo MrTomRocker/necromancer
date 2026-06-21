@@ -39,6 +39,7 @@ from ..const import (
     CONF_LINKED_GUARDS,
     CONF_MAX_ATTEMPTS,
     CONF_NOTIFY_ACTION,
+    CONF_NOTIFY_FOLLOWER_SUCCESS,
     CONF_OFF_ACTION,
     CONF_OFF_ON_DELAY,
     CONF_OFF_TIMEOUT,
@@ -280,8 +281,11 @@ def _notification_section(d: dict) -> dict:
     )
 
 
-def _link_section(options: list[dict], default: list[str]) -> dict:
-    """Collapsed multi-select of group partners (other recover guards).
+def _link_section(
+    options: list[dict], default: list[str], *, notify_success: bool = False
+) -> dict:
+    """Collapsed multi-select of group partners (other recover guards) + the
+    'notify the follower's success' toggle.
 
     Returns an empty dict when there are no other recover guards to link to, so
     the section is simply omitted (an empty SelectSelector would be pointless).
@@ -297,7 +301,10 @@ def _link_section(options: list[dict], default: list[str]) -> dict:
                     multiple=True,
                     mode=selector.SelectSelectorMode.LIST,
                 )
-            )
+            ),
+            vol.Required(
+                CONF_NOTIFY_FOLLOWER_SUCCESS, default=notify_success
+            ): selector.BooleanSelector(),
         },
         collapsed=True,
     )
@@ -504,6 +511,8 @@ def _build_data(step1: dict, step2: dict, strategy: str) -> dict:
         data[CONF_DEVICE_ID] = step1[CONF_DEVICE_ID]
     if not notify_only and step2.get(CONF_LINKED_GUARDS):
         data[CONF_LINKED_GUARDS] = sorted(step2[CONF_LINKED_GUARDS])
+    if not notify_only and step2.get(CONF_NOTIFY_FOLLOWER_SUCCESS):
+        behavior[CONF_NOTIFY_FOLLOWER_SUCCESS] = True
     return data
 
 

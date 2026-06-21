@@ -201,7 +201,8 @@
               "name": "Linked guards",
               "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
               "data": {
-                "linked_guards": "Guards in this group"
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
               }
             },
             "reload": {
@@ -242,7 +243,8 @@
               "name": "Linked guards",
               "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
               "data": {
-                "linked_guards": "Guards in this group"
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
               }
             },
             "reload": {
@@ -285,7 +287,8 @@
               "name": "Linked guards",
               "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
               "data": {
-                "linked_guards": "Guards in this group"
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
               }
             },
             "reload": {
@@ -326,7 +329,8 @@
               "name": "Linked guards",
               "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
               "data": {
-                "linked_guards": "Guards in this group"
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
               }
             },
             "reload": {
