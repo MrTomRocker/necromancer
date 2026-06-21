@@ -37,6 +37,15 @@ Diese Checkliste ist dafür gemacht, von einem **Agenten** ausgeführt zu werden
 
 Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kür. `[ ]` = beim Lauf abhaken.
 
+> **Flow-Hinweis (Mode-Wahl entfernt):** Der Device-Step trägt **kein** `mode`-Feld mehr. Manuelle Flow-Treiber
+> (`N._post_flow(fid,{...})`) dürfen `"mode"` NICHT mehr im Device-Step posten — sonst `extra keys not allowed
+> @ data['mode']`. Die Strategie-Wahl kommt erst im **nächsten** Step (`strategy`): `"notify"` (erste Option,
+> → Notify-Step) oder eine Recovery-Strategie (`switch`/`switch_check`/`action`/`action_check`/`actions`/
+> `actions_check`/`poe_port` → eigener Step). `N.create_guard({...,"mode":"recover"|"notify",...})` bleibt
+> unverändert gültig — das Testkit übersetzt den Spec-Key `mode` intern in die richtige Strategy-Step-Wahl.
+> Ist im Device-Step ein `assigned_device` gesetzt, ist im Recover-Step zusätzlich die Section `"reload":{}`
+> **pflicht** (sonst `required key not provided`).
+
 ---
 
 ## Refactor-Regressionen — PoE-Stale-Cache (B1) · Linking-Teardown (B2) · LinkCoordinator (M1)
@@ -180,8 +189,8 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **LINK-7 — Auflösen: Abwahl trennt beidseitig, Clique-Schließung** · `P1`
   - **Prüft:** Einen Partner abwählen entfernt die Kante in beiden Richtungen; transitive Gruppen (A-B, B-C) bleiben zusammen, bis jemand alle Kanten desselben Linktyps löst.
   - **Files:** `links.py:25` → `link_components` (Connected-Components), `links.py:58` → `group_of` (Gruppe ohne sich selbst); `config_flow.py:1036-1049` → Reconfigure schreibt den `linked_guards`-Diff beidseitig in die Partner-Subentries zurück.
-  - **Treiber:** A,B,C anlegen, A↔B und B↔C linken. Im Reconfigure von B den Partner A abwählen, speichern. `N.list_subentries(N.hub_id())` + Reconfigure-Defaults von A lesen.
-  - **Assert:** A hat B nicht mehr als Partner (beidseitig getrennt); B↔C bleibt. (Gruppe wird über `link_components` neu berechnet.)
+  - **Treiber:** A,B,C anlegen, A↔B und B↔C linken (beim Anlegen B→A, C→B deklarieren). Im Reconfigure von B den Partner A abwählen, speichern. **`linked_guards` aus dem Storage lesen** (`config/.storage/core.config_entries` → Entry → `subentries[].data.linked_guards`) — `N.list_subentries` (WS) liefert NUR Metadaten (`subentry_id`/`title`/`subentry_type`/`unique_id`), KEIN `data`.
+  - **Assert:** Nach der Abwahl trägt weder A noch B die Kante A–B (Reconfigure schreibt den Diff beidseitig, `config_flow.py:1036-1049`); B↔C bleibt. **Hinweis zur Speicherform:** Beim *Anlegen* wird `linked_guards` **gerichtet** abgelegt (nur im deklarierenden Guard, z. B. B:[A], C:[B] — A bleibt []); die *ungerichtete* Gruppe berechnet `link_components` zur **Laufzeit**. Daher NICHT auf symmetrische Speicherung nach dem Create prüfen — die Symmetrie ist Laufzeit-Verhalten (durch LINK-2 belegt: B folgt A, obwohl A B nicht speichert). Der beidseitige Diff-Writeback gilt für den **Reconfigure**-Pfad.
   - **Cleanup:** alle drei `N.delete_subentry(...)`
 
 - [ ] **LINK-8 — Teardown race-safe: Stop eskaliert Follower nicht** · `P1`
@@ -361,7 +370,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **HQ7 — Kaputtes Jinja im Flow abgelehnt** · `P0`
   - **Prüft:** Ungültiges Template (`{{ 1 + }}`) wird vom TemplateSelector validiert → Flow-Error, kein Submit.
   - **Files:** `config_flow.py` → `_health_section` Z. 308-311 (`selector.TemplateSelector()` validiert serverseitig).
-  - **Treiber:** Flow starten (`fid=r["flow_id"]`), `{"source_type":"template_based"}`, dann device-Step posten mit `{"name":"HQbad","mode":"notify","assigned_device":{},"template_check":{"template":"{{ 1 + }}"}}`.
+  - **Treiber:** Flow starten (`fid=r["flow_id"]`), `{"source_type":"template_based"}`, dann device-Step posten mit `{"name":"HQbad","assigned_device":{},"template_check":{"template":"{{ 1 + }}"}}` (kein `mode`-Feld im Device-Step — die Strategie-Wahl inkl. `notify` kommt erst im nächsten Step).
   - **Assert:** Antwort hat `errors` (z. B. `{"template_check":...}` oder `base`) bzw. `type!="create_entry"` und bleibt `step_id=="device"`.
   - **Cleanup:** — (kein Subentry erzeugt).
 
@@ -534,7 +543,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **CC1 — Kaputtes Jinja im Health-Template wird abgelehnt** · `P0`
   - **Prüft:** Ein syntaktisch defektes Template (`{{ 1 + }}`, unclosed) wird vom `TemplateSelector` validiert und der Device-Step lehnt ab (kein `create_entry`).
   - **Files:** `config_flow.py:304` `_health_section` (SOURCE_TEMPLATE) nutzt `selector.TemplateSelector()` (Zeile 310, serverseitige Validierung) in Section `template_check` (`SECTION_TEMPLATE`, Zeile 241).
-  - **Treiber:** Subentry-Flow manuell bis `device`-Step treiben und `template_check.template = "{{ 1 + }}"` posten (statt `N.create_guard`, das nur valide Templates kennt): `requests.post(.../subentries/flow, {"handler":[hub,"device"]})` → `_post_flow(fid,{"source_type":"template_based"})` → `_post_flow(fid,{"name":"BadJinja","mode":"recover","assigned_device":{},"template_check":{"template":"{{ 1 + }}"}})`.
+  - **Treiber:** Subentry-Flow manuell bis `device`-Step treiben und `template_check.template = "{{ 1 + }}"` posten (statt `N.create_guard`, das nur valide Templates kennt): `requests.post(.../subentries/flow, {"handler":[hub,"device"]})` → `_post_flow(fid,{"source_type":"template_based"})` → `_post_flow(fid,{"name":"BadJinja","assigned_device":{},"template_check":{"template":"{{ 1 + }}"}})` (kein `mode` im Device-Step).
   - **Assert:** Antwort enthält `errors` (z. B. `errors["template_check"]`/`base`) bzw. bleibt `step_id=="device"`; KEIN `type=="create_entry"`.
   - **Cleanup:** — (kein Subentry angelegt)
 
@@ -623,7 +632,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **SF1 — Sektionen serverseitig ausgeklappt** · `P1`
   - **Prüft:** Nicht-collapsed Sektionen melden dem Frontend `expanded:true` (Default `collapsed=False`); nur `linked_guards` ist collapsed.
   - **Files:** `config_flow.py` → `_section` (Z.252-254): `section(vol.Schema(fields), {"collapsed": collapsed})` mit `collapsed: bool = False`; `_link_section` (Z.385-405) ist die EINZIGE Sektion mit `collapsed=True`. Serverseitige Übersetzung in `homeassistant/helpers/config_validation.py` Z.1189-1197: Section → `{"type":"expandable","expanded": not collapsed}`.
-  - **Treiber:** Flow bis Step `switch` treiben (testkit-intern): `hub=N.hub_id()`; `r=N._post_flow`-Kette ist nur in `create_guard` gekapselt — hier manuell: POST `/api/config/config_entries/subentries/flow` mit `{"handler":[hub,"device"]}` → `fid`; `N._post_flow(fid,{"source_type":"state_based"})` (→ `device`); `N._post_flow(fid,{"name":"SecX","mode":"recover","assigned_device":{},"state_check":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]}})` (→ `strategy`); `N._post_flow(fid,{"strategy":"switch"})` (→ `switch`). Im zurückgegebenen `data_schema` die Felder mit `name=="behavior"` / `name=="notification"` suchen.
+  - **Treiber:** Flow bis Step `switch` treiben (testkit-intern): `hub=N.hub_id()`; `r=N._post_flow`-Kette ist nur in `create_guard` gekapselt — hier manuell: POST `/api/config/config_entries/subentries/flow` mit `{"handler":[hub,"device"]}` → `fid`; `N._post_flow(fid,{"source_type":"state_based"})` (→ `device`); `N._post_flow(fid,{"name":"SecX","assigned_device":{},"state_check":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]}})` (→ `strategy`; kein `mode`-Feld); `N._post_flow(fid,{"strategy":"switch"})` (→ `switch`). Im zurückgegebenen `data_schema` die Felder mit `name=="behavior"` / `name=="notification"` suchen.
   - **Assert:** Im `switch`-Schema hat das Feld `behavior` `"type":"expandable"` und `"expanded": true`; das Feld `notification` ebenfalls `"expanded": true`; ein evtl. vorhandenes `linked_guards`-Feld (nur wenn ein ANDERER Recover-Guard existiert) trägt `"expanded": false`.
   - **Cleanup:** Flow ohne Save verwerfen: `requests.delete(f"http://localhost:8123/api/config/config_entries/subentries/flow/{fid}",headers=N.H)`.
 
@@ -895,8 +904,8 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 - [ ] **DLN1 — Verknüpfen hängt 4 Entities ans Zielgerät** · `P0`
   - **Prüft:** Ein Guard mit `assigned_device` erzeugt KEIN eigenes „Überwachtes Gerät", sondern hängt seine 4 Entities unter dem Subentry an das gewählte Zielgerät; dessen Name bleibt unangetastet.
   - **Files:** `__init__.py` → `_reconcile_devices` (Zeile 231–272: `standalone`/`linked_targets`-Split, stale-device-Remove `"Removing stale guard device %s"`); `config_flow.py` → `_device_schema` Zeile 341–349 (Section `SECTION_DEVICE="assigned_device"`, Feld `CONF_DEVICE_ID="device_id"`).
-  - **Treiber:** Ziel-Device-id aus `N.g("/api/config/device_registry/list")` (irgendein Nicht-Necromancer-Gerät) holen. `N.create_guard` setzt `assigned_device={}` hart (Testkit Zeile 94) → ein verlinkter Guard ist NICHT direkt über `create_guard` baubar; stattdessen Subentry-Flow manuell treiben: `r=N._post_flow(fid,{"source_type":"state_based"})` → Device-Step mit `{"name":"LinkTgtX","mode":"recover","assigned_device":{"device_id":<id>},"state_check":{...}}` posten, dann Strategy/Switch wie sonst. Nach Reload `N.g("/api/config/device_registry/list")` und Entity-Registry filtern.
-  - **Assert:** Zielgerät-Name unverändert; `sensor.linktgtx_status` existiert (`N.st(...)≠None`) und ist via Entity-Registry am Zielgerät (`device_id`==Ziel-id); KEIN zusätzliches Device mit identifier `(necromancer,<sid>)` im Registry; bei vorher existierendem Standalone erscheint `"Removing stale guard device"` in `N.log()`.
+  - **Treiber:** Ziel-Device-id (`<tgt>`) aus `N.ws([{"type":"config/device_registry/list"}])` (irgendein Nicht-Necromancer-Gerät) holen. `N.create_guard` setzt `assigned_device={}` hart → ein verlinkter Guard ist NICHT direkt über `create_guard` baubar; stattdessen Subentry-Flow manuell treiben: `N._post_flow(fid,{"source_type":"state_based"})` → Device-Step mit `{"name":"LinkTgtX","assigned_device":{"device_id":<tgt>},"state_check":{...}}` posten (kein `mode`-Feld) → `N._post_flow(fid,{"strategy":"action_check"})` → Recover-Step **inkl. `"reload":{}`** posten (bei zugewiesenem Gerät ist die Reload-Section pflicht: `{"action":[...],"behavior":{...},"notification":{},"linked_guards":{},"reload":{}}`). Nach Reload (`POST .../entry/<hub>/reload`) Entity-Registry via WS lesen, nach `config_subentry_id==<sid>` filtern.
+  - **Assert:** Zielgerät-Name unverändert; ≥4 Entities mit `config_subentry_id==<sid>`, **alle** mit `device_id==<tgt>`; eine davon ist der Status-Sensor (`*_status`). **Hinweis:** Bei Geräte-Link übernehmen die View-Entities den **Zielgeräte-Namen** (z. B. `sensor.<zielgerät>_status`), NICHT den Guard-Namen — also nicht auf `sensor.linktgtx_status` prüfen, sondern über `config_subentry_id` filtern. KEIN zusätzliches Device mit identifier `(necromancer,<sid>)` im Registry; bei vorher existierendem Standalone erscheint `"Removing stale guard device"` in `N.log()`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
 - [ ] **DLN2 — Auflösen setzt Device-Namen auf Guard-Namen (kein name_by_user-Override)** · `P0`
@@ -909,14 +918,14 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 - [ ] **DLN3 — Guard-Rename ändert Device-Namen NICHT (kein falsches name_reset)** · `P0`
   - **Prüft:** Reine Umbenennung (Device blieb unverändert zugewiesen/standalone) löst KEIN `name_reset` aus — `_finish` flaggt nur, wenn vorher device_id gesetzt war und jetzt leer.
   - **Files:** `config_flow.py` → `_finish` Zeile 1059 (`if subentry.data.get(CONF_DEVICE_ID) and not data.get(CONF_DEVICE_ID)`).
-  - **Treiber:** Standalone-Guard `eid,sid=N.create_guard({...,"name":"RenA",...})`. Reconfigure-Flow nur mit neuem Namen `"RenB"`. `N.wait(3)`; `N.log()`.
-  - **Assert:** Log enthält NICHT `"Resetting device name to"` für diesen Guard; `sensor.renb_status` existiert (`N.st(...)≠None`).
+  - **Treiber:** Standalone-Guard `eid,sid=N.create_guard({...,"name":"RenA",...})`. Reconfigure-Flow (Init: `POST .../subentries/flow` mit `{"handler":[hub,"device"],"subentry_id":sid}` → `step_id=="reconfigure"`) komplett re-driven, im Device-Step nur neuer Name `"RenB"`. `N.wait(3)`; `N.log()` + `device_registry/list`.
+  - **Assert:** Log enthält NICHT `"Resetting device name to"` für diesen Guard; das Standalone-Device `(necromancer,<sid>)` heißt jetzt `name=="RenB"` (Geräte-Name folgt dem Guard-Namen), `name_by_user==None`. **Hinweis:** Die `entity_id` bleibt sticky (`sensor.rena_status`) — HA benennt entity_ids beim Geräte-Rename NICHT um; daher NICHT auf `sensor.renb_status` prüfen, sondern den Device-Namen bzw. die Existenz eines `*_status`-Sensors unter `config_subentry_id==<sid>`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
 - [ ] **DLN4 — Self-/Cross-Link blockiert (`no_self_link`)** · `P0`
   - **Prüft:** Ein Necromancer-eigenes Gerät kann nicht als `assigned_device` gewählt werden — Device-Step lehnt mit `no_self_link` ab.
   - **Files:** `config_flow.py` → `_is_own_device` (Zeile 794–799) + `async_step_device` Zeile 888–889 (`errors[CONF_DEVICE_ID]="no_self_link"`); de.json `config_subentries.device.error.no_self_link`.
-  - **Treiber:** Eigenes Guard-Device-id aus `device_registry/list` (identifier-domain `necromancer`) holen, Subentry-Flow bis Device-Step treiben und Device-Step mit `{"name":"SelfX","mode":"recover","assigned_device":{"device_id":<own_id>},"state_check":{...}}` posten.
+  - **Treiber:** Eigenes Guard-Device-id aus `device_registry/list` (identifier-domain `necromancer`) holen, Subentry-Flow bis Device-Step treiben und Device-Step mit `{"name":"SelfX","assigned_device":{"device_id":<own_id>},"state_check":{...}}` posten (kein `mode`-Feld; der `no_self_link`-Fehler greift bereits im Device-Step, der Strategy-Step wird nie erreicht).
   - **Assert:** Antwort `step_id=="device"` mit `errors=={"device_id":"no_self_link"}` (kein `create_entry`).
   - **Cleanup:** Flow nicht abgeschlossen → „—"
 
