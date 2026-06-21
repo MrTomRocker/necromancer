@@ -1,0 +1,21 @@
+# Enforce LF everywhere — repo blobs and working-tree checkout (Linux dev container).
+# Overrides any per-machine core.autocrlf, so Windows and Linux agree.
+* text=auto eol=lf
+
+# Explicit text types
+*.py    text eol=lf
+*.json  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.txt   text eol=lf
+*.sh    text eol=lf
+
+# Binary assets — never normalized
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.gif   binary

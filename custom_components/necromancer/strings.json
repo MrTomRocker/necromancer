@@ -18,18 +18,24 @@
           "add_port": "Add port",
           "edit_port": "Edit port",
           "delete_port": "Delete port",
+          "import_ports": "Import ports",
+          "export_ports": "Export ports",
           "save": "Save"
         }
       },
       "add_port": {
         "title": "PoE port",
         "description": "A PoE port: how it's switched, how the connected device is recognised, how its online status is checked, and its timing.",
-        "data": { "label": "Port name" },
+        "data": {
+          "label": "Port name"
+        },
         "sections": {
           "power": {
             "name": "Power switch",
             "description": "Switch that cuts power (PoE) on the port (e.g. a smart plug or PoE switch).",
-            "data": { "actuator": "switch / input_boolean" }
+            "data": {
+              "actuator": "switch / input_boolean"
+            }
           },
           "identity": {
             "name": "Recognition",
@@ -64,13 +70,39 @@
       "edit_port": {
         "title": "Which port to edit?",
         "description": "Pick the port you want to edit.",
-        "data": { "port": "Port" }
+        "data": {
+          "port": "Port"
+        }
       },
       "delete_port": {
         "title": "Which port to delete?",
         "description": "Pick the port you want to remove.",
-        "data": { "port": "Port" }
+        "data": {
+          "port": "Port"
+        }
+      },
+      "import_ports": {
+        "title": "Import ports",
+        "description": "Paste a list of ports as YAML. “Merge” adds new ports and updates existing ones with the same name; “Replace” overwrites the whole list. Tip: export first to see the exact format.",
+        "data": {
+          "import_mode": "Mode",
+          "ports_yaml": "Ports (YAML)"
+        }
+      },
+      "export_ports": {
+        "title": "Export ports",
+        "description": "Choose which ports to export — all are selected by default.",
+        "data": {
+          "selection": "Ports"
+        }
+      },
+      "export_result": {
+        "title": "Exported ports",
+        "description": "Copy the YAML below — edit it and paste it back via “Import ports”.\n\n```\n{yaml}\n```"
       }
+    },
+    "error": {
+      "import_failed": "Import failed: {error}"
     }
   },
   "config_subentries": {
@@ -81,7 +113,9 @@
         "reconfigure": "Reconfigure device"
       },
       "error": {
-        "no_self_link": "Necromancer's own devices can't be linked. Pick a different device."
+        "no_self_link": "Necromancer's own devices can't be linked. Pick a different device.",
+        "duplicate_name": "A guard with this name already exists. Pick a unique name so the status entities stay unambiguous.",
+        "action_required": "This recovery needs an action — a guard with no action can only escalate."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration successful."
@@ -90,17 +124,23 @@
         "user": {
           "title": "State source",
           "description": "How should Necromancer tell whether the device is OK — from an entity's state, or from a Jinja template?",
-          "data": { "source_type": "Source type" }
+          "data": {
+            "source_type": "Source type"
+          }
         },
         "reconfigure": {
           "title": "State source",
           "description": "How should Necromancer tell whether the device is OK — from an entity's state, or from a Jinja template?",
-          "data": { "source_type": "Source type" }
+          "data": {
+            "source_type": "Source type"
+          }
         },
         "device": {
           "title": "Device & state",
           "description": "Give the device a name and define how its state is detected and what happens on a problem.",
-          "data": { "name": "Name", "mode": "Mode" },
+          "data": {
+            "name": "Name"
+          },
           "sections": {
             "state_check": {
               "name": "State check",
@@ -114,8 +154,10 @@
             },
             "template_check": {
               "name": "State template",
-              "description": "A Jinja template that returns true (OK) or false (faulty) — e.g. a comparison like CPU below 90, or is_state(...). It's re-checked when referenced entities change. An empty/unknown result or a render error counts as unknown (no false alarm).",
-              "data": { "template": "Template" }
+              "description": "A Jinja template that returns true (OK) or false (faulty) — e.g. a comparison like CPU below 90, or is_state(...). It's re-checked when referenced entities change. An empty/unknown result or a render error counts as unknown (no false alarm). Point it at the guarded device — don't reference this guard's own status/health entities, or you create a feedback loop.",
+              "data": {
+                "template": "Template"
+              }
             },
             "assigned_device": {
               "name": "Assigned device (optional)",
@@ -126,7 +168,9 @@
         "strategy": {
           "title": "Recovery strategy",
           "description": "How should the device be brought back when it fails? \"With health-check\" waits for the device to report OK again afterwards; the plain variants assume the action worked.",
-          "data": { "strategy": "Strategy" }
+          "data": {
+            "strategy": "Strategy"
+          }
         },
         "switch": {
           "title": "Power-cycle a switch",
@@ -148,15 +192,35 @@
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "data": {
+                "notify_action": "Action"
+              }
+            },
+            "linked_guards": {
+              "name": "Linked guards",
+              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "data": {
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
+              }
+            },
+            "reload": {
+              "name": "Restart device integration",
+              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "data": {
+                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_delay": "Wait before restarting"
+              }
             }
           }
         },
         "action": {
           "title": "Run an action",
           "description": "Runs your action when the device fails. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry.",
-          "data": { "action": "Action (e.g. a script, service, SSH, webhook)" },
+          "data": {
+            "action": "Action (e.g. a script, service, SSH, webhook)"
+          },
           "sections": {
             "behavior": {
               "name": "Behaviour",
@@ -170,8 +234,26 @@
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "data": {
+                "notify_action": "Action"
+              }
+            },
+            "linked_guards": {
+              "name": "Linked guards",
+              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "data": {
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
+              }
+            },
+            "reload": {
+              "name": "Restart device integration",
+              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "data": {
+                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_delay": "Wait before restarting"
+              }
             }
           }
         },
@@ -196,15 +278,35 @@
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "data": {
+                "notify_action": "Action"
+              }
+            },
+            "linked_guards": {
+              "name": "Linked guards",
+              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "data": {
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
+              }
+            },
+            "reload": {
+              "name": "Restart device integration",
+              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "data": {
+                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_delay": "Wait before restarting"
+              }
             }
           }
         },
         "poe_port": {
           "title": "Auto PoE — find the port",
           "description": "Finds the matching PoE port by the device's id and powers it off and on. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry. Manage the ports under the integration's \"Configure\".",
-          "data": { "expected_id": "Device id (e.g. MAC, IP or name)" },
+          "data": {
+            "expected_id": "Device id (e.g. MAC, IP or name)"
+          },
           "sections": {
             "behavior": {
               "name": "Behaviour",
@@ -218,20 +320,42 @@
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "data": {
+                "notify_action": "Action"
+              }
+            },
+            "linked_guards": {
+              "name": "Linked guards",
+              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "data": {
+                "linked_guards": "Guards in this group",
+                "notify_follower_success": "Report success even when this guard follows a group repair"
+              }
+            },
+            "reload": {
+              "name": "Restart device integration",
+              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "data": {
+                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_delay": "Wait before restarting"
+              }
             }
           }
         },
         "notify": {
           "title": "Notification",
           "description": "What should happen when a problem is detected.",
-          "data": { "debounce": "Wait before reacting" },
+          "data": {
+            "debounce": "Wait before reacting"
+          },
           "sections": {
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the ready-made localized text), name, event.",
-              "data": { "notify_action": "Action" }
+              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "data": {
+                "notify_action": "Action"
+              }
             }
           }
         }
@@ -248,18 +372,39 @@
           "recovering": "Recovering",
           "verify": "Verifying",
           "cooldown": "Cooldown",
-          "escalated": "Escalated"
+          "escalated": "Escalated",
+          "snoozed": "Snoozed"
         }
       }
     },
     "binary_sensor": {
-      "health": { "name": "Health" }
+      "health": {
+        "name": "Health"
+      }
     },
     "switch": {
-      "auto_restart": { "name": "Auto-recovery" }
+      "auto_restart": {
+        "name": "Auto-recovery"
+      }
     },
     "button": {
-      "recover": { "name": "Revive" }
+      "recover": {
+        "name": "Revive"
+      }
+    },
+    "event": {
+      "recovery": {
+        "name": "Recovery",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "recovered": "Recovered",
+              "escalated": "Escalated",
+              "blocked": "Blocked"
+            }
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -269,14 +414,9 @@
         "template_based": "Jinja template"
       }
     },
-    "mode": {
-      "options": {
-        "recover": "Auto-recovery",
-        "notify": "Notify only"
-      }
-    },
     "strategy": {
       "options": {
+        "notify": "Notify only",
         "switch": "Power-cycle a switch",
         "switch_check": "Power-cycle a switch + health-check",
         "action": "Run an action",
@@ -285,6 +425,61 @@
         "actions_check": "Off/on actions + health-check",
         "poe_port": "Auto PoE (find the port automatically)"
       }
+    },
+    "import_mode": {
+      "options": {
+        "merge": "Merge (add new, update existing)",
+        "replace": "Replace (overwrite all)"
+      }
+    }
+  },
+  "services": {
+    "repair_poe_port": {
+      "name": "Repair PoE port",
+      "description": "Resolve a device id to its PoE port and power-cycle it. Blocking and serialised per port, so multiple guards or automations coordinate on a single cycle instead of fighting over the same port.",
+      "fields": {
+        "id": {
+          "name": "Device id",
+          "description": "The id that identifies the device on its PoE port — the MAC, IP or static label configured for that port."
+        }
+      }
+    },
+    "reset": {
+      "name": "Reset",
+      "description": "Clear an escalated guard back to normal and re-check it. If the device is still unhealthy the guard tries to recover again; if it has recovered it simply resumes watching."
+    },
+    "snooze": {
+      "name": "Snooze",
+      "description": "Temporarily suspend a guard for a set duration — it ignores the device's health and raises no alerts (e.g. during planned maintenance), then resumes automatically.",
+      "fields": {
+        "duration": {
+          "name": "Duration",
+          "description": "How long to suspend the guard before it automatically resumes."
+        }
+      }
+    },
+    "unsnooze": {
+      "name": "Unsnooze",
+      "description": "Resume a snoozed guard immediately instead of waiting for its snooze to elapse."
+    },
+    "snooze_all": {
+      "name": "Snooze all",
+      "description": "Snooze every guard for a duration — system-wide maintenance mode. Each guard ignores health and raises no alerts, then auto-resumes. Guards mid-recovery are skipped (best-effort).",
+      "fields": {
+        "duration": {
+          "name": "Duration",
+          "description": "How long to suspend all guards before they auto-resume."
+        }
+      }
+    },
+    "unsnooze_all": {
+      "name": "Unsnooze all",
+      "description": "Resume every snoozed guard immediately."
+    }
+  },
+  "exceptions": {
+    "snooze_during_recovery": {
+      "message": "Cannot snooze {name} while it is actively recovering — wait for the recovery to finish."
     }
   }
 }

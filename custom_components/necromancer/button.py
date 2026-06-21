@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NecromancerConfigEntry
-from .engine import DeviceEngine
+from .core.engine import DeviceEngine
 from .entity import NecromancerEntity
 
 
@@ -16,7 +16,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    for subentry_id, engine in entry.runtime_data.items():
+    for subentry_id, engine in entry.runtime_data.engines.items():
         if not engine.allows_recovery:
             continue  # notify-only guard has no recover action
         async_add_entities(

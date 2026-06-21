@@ -18,18 +18,24 @@
           "add_port": "Port hinzufügen",
           "edit_port": "Port ändern",
           "delete_port": "Port entfernen",
+          "import_ports": "Ports importieren",
+          "export_ports": "Ports exportieren",
           "save": "Speichern"
         }
       },
       "add_port": {
         "title": "PoE-Port",
         "description": "Ein PoE-Port: wie er geschaltet wird, woran das angeschlossene Gerät erkannt wird, wie sein Online-Status geprüft wird und welche Wartezeiten gelten.",
-        "data": { "label": "Port-Name" },
+        "data": {
+          "label": "Port-Name"
+        },
         "sections": {
           "power": {
             "name": "Schalter",
             "description": "Schalter, der den Strom (PoE) am Port unterbricht (z. B. eine schaltbare Steckdose oder ein PoE-Schalter).",
-            "data": { "actuator": "switch / input_boolean" }
+            "data": {
+              "actuator": "switch / input_boolean"
+            }
           },
           "identity": {
             "name": "Erkennung",
@@ -64,13 +70,39 @@
       "edit_port": {
         "title": "Welchen Port ändern?",
         "description": "Wähle den Port, den du ändern möchtest.",
-        "data": { "port": "Port" }
+        "data": {
+          "port": "Port"
+        }
       },
       "delete_port": {
         "title": "Welchen Port entfernen?",
         "description": "Wähle den Port, den du entfernen möchtest.",
-        "data": { "port": "Port" }
+        "data": {
+          "port": "Port"
+        }
+      },
+      "import_ports": {
+        "title": "Ports importieren",
+        "description": "Füge eine Port-Liste als YAML ein. „Zusammenführen“ ergänzt neue Ports und aktualisiert vorhandene mit gleichem Namen; „Ersetzen“ überschreibt die ganze Liste. Tipp: vorher exportieren, um das genaue Format zu sehen.",
+        "data": {
+          "import_mode": "Modus",
+          "ports_yaml": "Ports (YAML)"
+        }
+      },
+      "export_ports": {
+        "title": "Ports exportieren",
+        "description": "Wähle, welche Ports exportiert werden – standardmäßig alle.",
+        "data": {
+          "selection": "Ports"
+        }
+      },
+      "export_result": {
+        "title": "Exportierte Ports",
+        "description": "Kopiere das YAML unten – bearbeiten und über „Ports importieren“ wieder einspielen.\n\n```\n{yaml}\n```"
       }
+    },
+    "error": {
+      "import_failed": "Import fehlgeschlagen: {error}"
     }
   },
   "config_subentries": {
@@ -81,7 +113,9 @@
         "reconfigure": "Gerät neu konfigurieren"
       },
       "error": {
-        "no_self_link": "Necromancer-eigene Geräte können nicht verknüpft werden. Wähle ein anderes Gerät."
+        "no_self_link": "Necromancer-eigene Geräte können nicht verknüpft werden. Wähle ein anderes Gerät.",
+        "duplicate_name": "Ein Guard mit diesem Namen existiert bereits. Wähle einen eindeutigen Namen, damit die Status-Entitäten eindeutig bleiben.",
+        "action_required": "Diese Reparatur braucht eine Aktion — ein Guard ohne Aktion kann nur eskalieren."
       },
       "abort": {
         "reconfigure_successful": "Neukonfiguration erfolgreich."
@@ -90,17 +124,23 @@
         "user": {
           "title": "Zustandsquelle",
           "description": "Woran soll Necromancer erkennen, ob das Gerät in Ordnung ist — am Zustand einer Entität oder über ein Jinja-Template?",
-          "data": { "source_type": "Quellentyp" }
+          "data": {
+            "source_type": "Quellentyp"
+          }
         },
         "reconfigure": {
           "title": "Zustandsquelle",
           "description": "Woran soll Necromancer erkennen, ob das Gerät in Ordnung ist — am Zustand einer Entität oder über ein Jinja-Template?",
-          "data": { "source_type": "Quellentyp" }
+          "data": {
+            "source_type": "Quellentyp"
+          }
         },
         "device": {
           "title": "Gerät & Zustand",
           "description": "Gib dem Gerät einen Namen und lege fest, woran sein Zustand erkannt wird und was bei einem Problem passieren soll.",
-          "data": { "name": "Name", "mode": "Modus" },
+          "data": {
+            "name": "Name"
+          },
           "sections": {
             "state_check": {
               "name": "Zustandsprüfung",
@@ -114,8 +154,10 @@
             },
             "template_check": {
               "name": "Zustands-Template",
-              "description": "Ein Jinja-Template, das true (in Ordnung) oder false (gestört) ergibt – z. B. ein Vergleich wie „CPU < 90“ oder is_state(...). Es wird neu geprüft, sobald sich referenzierte Entitäten ändern. Ein leeres/unbekanntes Ergebnis oder ein Render-Fehler gilt als unbekannt (kein Fehlalarm).",
-              "data": { "template": "Template" }
+              "description": "Ein Jinja-Template, das true (in Ordnung) oder false (gestört) ergibt – z. B. ein Vergleich wie „CPU < 90“ oder is_state(...). Es wird neu geprüft, sobald sich referenzierte Entitäten ändern. Ein leeres/unbekanntes Ergebnis oder ein Render-Fehler gilt als unbekannt (kein Fehlalarm). Richte es auf das überwachte Gerät – referenziere nicht die eigenen Status-/Health-Entitäten dieses Guards, sonst entsteht eine Rückkopplungsschleife.",
+              "data": {
+                "template": "Template"
+              }
             },
             "assigned_device": {
               "name": "Zugewiesenes Gerät (optional)",
@@ -126,7 +168,9 @@
         "strategy": {
           "title": "Reparatur-Strategie",
           "description": "Wie soll das Gerät wieder zum Laufen gebracht werden, wenn es ausfällt? „mit Health-Check“ wartet danach, bis das Gerät wieder „in Ordnung“ meldet; die einfachen Varianten nehmen an, dass die Aktion gewirkt hat.",
-          "data": { "strategy": "Strategie" }
+          "data": {
+            "strategy": "Strategie"
+          }
         },
         "switch": {
           "title": "Schalter aus- und einschalten",
@@ -148,15 +192,35 @@
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
-              "data": { "notify_action": "Aktion" }
+              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "data": {
+                "notify_action": "Aktion"
+              }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
+              }
+            },
+            "reload": {
+              "name": "Geräte-Integration neu laden",
+              "description": "Nach einem Reparaturversuch die Integration des zugewiesenen Geräts neu laden, bevor erneut die Health geprüft wird — nützlich, wenn Home Assistant die Verbindung zum Gerät neu aufbauen muss.",
+              "data": {
+                "reload_entry": "Integration des zugewiesenen Geräts nach Reparatur neu laden",
+                "reload_delay": "Wartezeit vor dem Neuladen"
+              }
             }
           }
         },
         "action": {
           "title": "Aktion ausführen",
           "description": "Führt bei einem Ausfall deine Aktion aus. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet wird, wie lange auf die Erholung des Geräts gewartet wird und wie oft erneut versucht wird.",
-          "data": { "action": "Aktion (z. B. Skript, Dienst, SSH, Webhook)" },
+          "data": {
+            "action": "Aktion (z. B. Skript, Dienst, SSH, Webhook)"
+          },
           "sections": {
             "behavior": {
               "name": "Verhalten",
@@ -170,8 +234,26 @@
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
-              "data": { "notify_action": "Aktion" }
+              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "data": {
+                "notify_action": "Aktion"
+              }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
+              }
+            },
+            "reload": {
+              "name": "Geräte-Integration neu laden",
+              "description": "Nach einem Reparaturversuch die Integration des zugewiesenen Geräts neu laden, bevor erneut die Health geprüft wird — nützlich, wenn Home Assistant die Verbindung zum Gerät neu aufbauen muss.",
+              "data": {
+                "reload_entry": "Integration des zugewiesenen Geräts nach Reparatur neu laden",
+                "reload_delay": "Wartezeit vor dem Neuladen"
+              }
             }
           }
         },
@@ -196,15 +278,35 @@
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
-              "data": { "notify_action": "Aktion" }
+              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "data": {
+                "notify_action": "Aktion"
+              }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
+              }
+            },
+            "reload": {
+              "name": "Geräte-Integration neu laden",
+              "description": "Nach einem Reparaturversuch die Integration des zugewiesenen Geräts neu laden, bevor erneut die Health geprüft wird — nützlich, wenn Home Assistant die Verbindung zum Gerät neu aufbauen muss.",
+              "data": {
+                "reload_entry": "Integration des zugewiesenen Geräts nach Reparatur neu laden",
+                "reload_delay": "Wartezeit vor dem Neuladen"
+              }
             }
           }
         },
         "poe_port": {
           "title": "Auto-PoE — passenden Port finden",
           "description": "Findet anhand der Geräte-Kennung den passenden PoE-Port und schaltet ihn aus und wieder ein. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet wird, wie lange auf die Erholung des Geräts gewartet wird und wie oft erneut versucht wird. Die Ports verwaltest du über „Konfigurieren“ der Integration.",
-          "data": { "expected_id": "Kennung des Geräts (z. B. MAC, IP oder Name)" },
+          "data": {
+            "expected_id": "Kennung des Geräts (z. B. MAC, IP oder Name)"
+          },
           "sections": {
             "behavior": {
               "name": "Verhalten",
@@ -218,20 +320,42 @@
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
-              "data": { "notify_action": "Aktion" }
+              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "data": {
+                "notify_action": "Aktion"
+              }
+            },
+            "linked_guards": {
+              "name": "Verknüpfte Guards",
+              "description": "Gruppiert diesen Guard mit anderen reparierenden Guards. Geht einer der Gruppe in Reparatur, folgen die anderen — sie warten und prüfen danach erneut, statt parallel zu reparieren. Die Verknüpfung ist beidseitig und transitiv: Verknüpfst du mit einem Guard, der schon Links hat, trittst du der ganzen Gruppe bei; zum Austreten alle abwählen.",
+              "data": {
+                "linked_guards": "Guards in dieser Gruppe",
+                "notify_follower_success": "Erfolg melden, auch wenn dieser Guard einer Gruppen-Reparatur folgt"
+              }
+            },
+            "reload": {
+              "name": "Geräte-Integration neu laden",
+              "description": "Nach einem Reparaturversuch die Integration des zugewiesenen Geräts neu laden, bevor erneut die Health geprüft wird — nützlich, wenn Home Assistant die Verbindung zum Gerät neu aufbauen muss.",
+              "data": {
+                "reload_entry": "Integration des zugewiesenen Geräts nach Reparatur neu laden",
+                "reload_delay": "Wartezeit vor dem Neuladen"
+              }
             }
           }
         },
         "notify": {
           "title": "Benachrichtigung",
           "description": "Was passieren soll, wenn ein Problem erkannt wird.",
-          "data": { "debounce": "Wartezeit vor Reaktion" },
+          "data": {
+            "debounce": "Wartezeit vor Reaktion"
+          },
           "sections": {
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige, lokalisierte Meldung), name, event.",
-              "data": { "notify_action": "Aktion" }
+              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "data": {
+                "notify_action": "Aktion"
+              }
             }
           }
         }
@@ -248,18 +372,39 @@
           "recovering": "Reparatur läuft",
           "verify": "Prüfung",
           "cooldown": "Abkühlphase",
-          "escalated": "Eskaliert"
+          "escalated": "Eskaliert",
+          "snoozed": "Schlummert"
         }
       }
     },
     "binary_sensor": {
-      "health": { "name": "Gesundheit" }
+      "health": {
+        "name": "Gesundheit"
+      }
     },
     "switch": {
-      "auto_restart": { "name": "Auto-Reparatur" }
+      "auto_restart": {
+        "name": "Auto-Reparatur"
+      }
     },
     "button": {
-      "recover": { "name": "Reparieren" }
+      "recover": {
+        "name": "Reparieren"
+      }
+    },
+    "event": {
+      "recovery": {
+        "name": "Wiederbelebung",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "recovered": "Wiederbelebt",
+              "escalated": "Eskaliert",
+              "blocked": "Blockiert"
+            }
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -269,14 +414,9 @@
         "template_based": "Jinja-Template"
       }
     },
-    "mode": {
-      "options": {
-        "recover": "Auto-Reparatur",
-        "notify": "Nur benachrichtigen"
-      }
-    },
     "strategy": {
       "options": {
+        "notify": "Nur benachrichtigen",
         "switch": "Schalter aus- und einschalten",
         "switch_check": "Schalter aus-/einschalten + Health-Check",
         "action": "Aktion ausführen",
@@ -285,6 +425,61 @@
         "actions_check": "Aktionen Aus/Ein + Health-Check",
         "poe_port": "Auto-PoE (Port automatisch finden)"
       }
+    },
+    "import_mode": {
+      "options": {
+        "merge": "Zusammenführen (neue ergänzen, vorhandene aktualisieren)",
+        "replace": "Ersetzen (alles überschreiben)"
+      }
+    }
+  },
+  "services": {
+    "repair_poe_port": {
+      "name": "PoE-Port reparieren",
+      "description": "Löst eine Geräte-id zu ihrem PoE-Port auf und startet ihn per Stromabschaltung neu. Blockierend und pro Port serialisiert, sodass mehrere Guards oder Automatisierungen sich auf einen Cycle einigen, statt um denselben Port zu konkurrieren.",
+      "fields": {
+        "id": {
+          "name": "Geräte-id",
+          "description": "Die id, die das Gerät an seinem PoE-Port identifiziert — die MAC, IP oder das statische Label, das für den Port konfiguriert ist."
+        }
+      }
+    },
+    "reset": {
+      "name": "Zurücksetzen",
+      "description": "Setzt einen eskalierten Guard auf normal zurück und prüft erneut. Ist das Gerät weiterhin gestört, versucht der Guard erneut eine Reparatur; ist es wiederhergestellt, wacht er einfach weiter."
+    },
+    "snooze": {
+      "name": "Schlummern",
+      "description": "Setzt einen Guard für eine bestimmte Dauer aus — er ignoriert die Gerätegesundheit und meldet nichts (z. B. bei geplanter Wartung) und wacht danach automatisch wieder auf.",
+      "fields": {
+        "duration": {
+          "name": "Dauer",
+          "description": "Wie lange der Guard ausgesetzt wird, bevor er automatisch wieder aufwacht."
+        }
+      }
+    },
+    "unsnooze": {
+      "name": "Schlummern beenden",
+      "description": "Beendet das Schlummern eines Guards sofort, statt auf den Ablauf zu warten."
+    },
+    "snooze_all": {
+      "name": "Alle schlummern",
+      "description": "Setzt alle Guards für eine Dauer aus — systemweiter Wartungsmodus. Jeder Guard ignoriert die Gesundheit und meldet nichts und wacht danach automatisch wieder auf. Guards mitten in einer Reparatur werden übersprungen (best-effort).",
+      "fields": {
+        "duration": {
+          "name": "Dauer",
+          "description": "Wie lange alle Guards ausgesetzt werden, bevor sie automatisch wieder aufwachen."
+        }
+      }
+    },
+    "unsnooze_all": {
+      "name": "Alle aufwecken",
+      "description": "Beendet das Schlummern aller Guards sofort."
+    }
+  },
+  "exceptions": {
+    "snooze_during_recovery": {
+      "message": "{name} kann nicht schlummern, während gerade eine Reparatur läuft — warte, bis sie abgeschlossen ist."
     }
   }
 }

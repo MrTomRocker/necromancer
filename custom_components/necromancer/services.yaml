@@ -1,0 +1,41 @@
+repair_poe_port:
+  fields:
+    id:
+      required: true
+      example: "ec:b5:fa:12:fd:07"
+      selector:
+        text:
+
+reset:
+  target:
+    entity:
+      integration: necromancer
+      domain: sensor
+
+snooze:
+  target:
+    entity:
+      integration: necromancer
+      domain: sensor
+  fields:
+    duration:
+      required: true
+      example: "01:00:00"
+      selector:
+        duration:
+
+unsnooze:
+  target:
+    entity:
+      integration: necromancer
+      domain: sensor
+
+snooze_all:
+  fields:
+    duration:
+      required: true
+      example: "01:00:00"
+      selector:
+        duration:
+
+unsnooze_all:

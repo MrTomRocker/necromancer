@@ -3,41 +3,75 @@
 HealthSource -> Engine (RecoveryPolicy) -> RecoveryDriver.
 One config entry = the Necromancer service. Each **guarded device** is a config
 *subentry* (added via "Add device"). One DeviceEngine per subentry lives in
-entry.runtime_data, keyed by subentry_id.
+entry.runtime_data.engines, keyed by subentry_id.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    ATTR_DURATION,
+    ATTR_ID,
     CONF_BEHAVIOR,
     CONF_DEVICE_ID,
     CONF_DRIVER,
     CONF_ENTITY_ID,
     CONF_HEALTH,
+    CONF_LINKED_GUARDS,
     CONF_POLICY,
     CONF_PORTS,
     CONF_TYPE,
     DOMAIN,
     LOGGER,
+    MODE_NOTIFY,
     PLATFORMS,
     SAVE_DELAY,
+    SERVICE_REPAIR_POE_PORT,
+    SERVICE_SNOOZE_ALL,
+    SERVICE_UNSNOOZE_ALL,
     STORAGE_VERSION,
     SUBENTRY_TYPE_DEVICE,
 )
-from .drivers import create_driver
-from .engine import DeviceEngine
-from .health import create_health
-from .policies import create_policy
+from .core.drivers import create_driver
+from .core.engine import DeviceEngine
+from .core.health import create_health
+from .core.links import link_components
+from .core.poe import PoeFabric
+from .core.policies import create_policy
 
-type NecromancerConfigEntry = ConfigEntry[dict[str, DeviceEngine]]
+
+@dataclass
+class NecromancerData:
+    """Typed per-entry runtime state (``entry.runtime_data``).
+
+    One engine per guarded-device subentry, plus the Store + its serializer so
+    unload can flush without a side `hass.data` registry. The PoE fabric and the
+    `name_reset` signal stay in `hass.data[DOMAIN]` on purpose: they outlive a
+    single entry's reload.
+    """
+
+    engines: dict[str, DeviceEngine]
+    store: Store
+    serialize: Callable[[], dict]
+
+
+type NecromancerConfigEntry = ConfigEntry[NecromancerData]
 
 
 def _build_engine(
@@ -47,6 +81,9 @@ def _build_engine(
     persisted: dict | None,
     save: Callable[[], None],
     on_health_renamed: Callable[[str], None],
+    subentry_id: str,
+    linked_guards: list[str],
+    engines: dict[str, DeviceEngine],
 ) -> DeviceEngine:
     """Construct a DeviceEngine from a subentry's config dict."""
     return DeviceEngine(
@@ -60,6 +97,9 @@ def _build_engine(
         persisted,
         save,
         on_health_renamed,
+        subentry_id=subentry_id,
+        linked_guards=linked_guards,
+        engines=engines,
     )
 
 
@@ -87,9 +127,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
     stored = await store.async_load() or {}
     engines: dict[str, DeviceEngine] = {}
 
+    # PoE fabric: shared id->port resolver + per-port status/lock, driving the
+    # necromancer.repair_poe_port service. A domain-level singleton so it survives
+    # reloads (and the service handler keeps a stable reference).
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    fabric: PoeFabric = domain_data.get("fabric") or PoeFabric(hass)
+    domain_data["fabric"] = fabric
+
     @callback
     def _serialize() -> dict:
-        return {sid: engine.snapshot() for sid, engine in engines.items()}
+        data: dict = {sid: engine.snapshot() for sid, engine in engines.items()}
+        data["_poe_cache"] = fabric.cache
+        return data
 
     def _save() -> None:
         store.async_delay_save(_serialize, SAVE_DELAY)
@@ -98,29 +147,101 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
     # searches the whole list, so inject it into each such driver at setup. An
     # options change reloads us (the update listener below), keeping it fresh.
     ports = entry.options.get(CONF_PORTS, [])
+    fabric.set_ports(ports, cache=stored.get("_poe_cache"))
     for port in ports:
-        LOGGER.info("PoE port loaded — %s", port)
+        LOGGER.debug("PoE port loaded — %s", port)
+
+    if not hass.services.has_service(DOMAIN, SERVICE_REPAIR_POE_PORT):
+
+        async def _repair_poe_port(call: ServiceCall) -> None:
+            port_id = call.data[ATTR_ID]
+            LOGGER.info("repair_poe_port requested for %s", port_id)
+            await fabric.repair(port_id)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_REPAIR_POE_PORT,
+            _repair_poe_port,
+            schema=vol.Schema({vol.Required(ATTR_ID): cv.string}),
+        )
+
+    # Bulk "maintenance mode" services (no target — every guard, incl. notify-only).
+    # Re-registered each setup so the handler closes over the current entry's engines.
+    async def _snooze_all(call: ServiceCall) -> None:
+        duration = call.data[ATTR_DURATION]
+        busy: list[str] = []
+        for engine in entry.runtime_data.engines.values():
+            try:
+                engine.snooze(duration)
+            except ServiceValidationError:
+                busy.append(engine.name)  # mid-recovery — best-effort, skip it
+        if busy:
+            LOGGER.warning(
+                "snooze_all: skipped %s guard(s) busy recovering: %s",
+                len(busy),
+                ", ".join(busy),
+            )
+
+    async def _unsnooze_all(call: ServiceCall) -> None:
+        for engine in entry.runtime_data.engines.values():
+            engine.unsnooze()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SNOOZE_ALL,
+        _snooze_all,
+        schema=vol.Schema({vol.Required(ATTR_DURATION): cv.positive_time_period}),
+    )
+    hass.services.async_register(DOMAIN, SERVICE_UNSNOOZE_ALL, _unsnooze_all)
+
+    # Guard linking: resolve each guard's group (clique-closed) from the declared
+    # links. Only **recover** guards can link (matching the config flow's options),
+    # so notify-only guards are excluded from the closure — a guard reconfigured to
+    # notify-only therefore drops out of every group instead of lingering inertly.
+    def _is_recover(se) -> bool:
+        return (
+            se.subentry_type == SUBENTRY_TYPE_DEVICE
+            and se.data.get(CONF_POLICY, {}).get(CONF_TYPE) != MODE_NOTIFY
+        )
+
+    device_ids = {sid for sid, se in entry.subentries.items() if _is_recover(se)}
+    declared_links = {
+        sid: set(se.data.get(CONF_LINKED_GUARDS, []) or [])
+        for sid, se in entry.subentries.items()
+        if _is_recover(se)
+    }
+    groups = link_components(declared_links, device_ids)
 
     for subentry_id, subentry in entry.subentries.items():
         if subentry.subentry_type != SUBENTRY_TYPE_DEVICE:
             continue
         cfg = dict(subentry.data)
-        driver = cfg.get(CONF_DRIVER, {})
-        if driver.get(CONF_TYPE) == "poe_port":
-            cfg = {**cfg, CONF_DRIVER: {**driver, CONF_PORTS: ports}}
-        engine = _build_engine(
-            hass,
-            cfg.get(CONF_NAME, subentry.title),
-            cfg,
-            stored.get(subentry_id),
-            _save,
-            _rename_handler(hass, entry, subentry_id),
-        )
-        await engine.async_start()
+        name = cfg.get(CONF_NAME, subentry.title)
+        # poe_port guards resolve + cycle through the shared fabric (which owns the
+        # port list), so nothing port-specific needs injecting into the driver here.
+        linked = sorted(groups.get(subentry_id, {subentry_id}) - {subentry_id})
+        try:
+            engine = _build_engine(
+                hass,
+                name,
+                cfg,
+                stored.get(subentry_id),
+                _save,
+                _rename_handler(hass, entry, subentry_id),
+                subentry_id,
+                linked,
+                engines,
+            )
+            await engine.async_start()
+        except Exception:  # noqa: BLE001
+            # One malformed guard must not take down the whole entry (all guards):
+            # log which one and carry on with the rest.
+            LOGGER.exception("Failed to set up guard %r — skipping", name)
+            continue
         engines[subentry_id] = engine
         LOGGER.info(
             "Guard %r loaded — mode=%s, health=%s, strategy=%s (%s), "
-            "behavior=%s, device_link=%s, auto=%s",
+            "behavior=%s, device_link=%s, linked=%s, auto=%s",
             engine.name,
             "notify-only" if not engine.allows_recovery else "recover",
             engine.health.describe(),
@@ -128,20 +249,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
             engine.driver.target_info(),
             cfg.get(CONF_BEHAVIOR, {}),
             engine.link_device_id or "none",
+            linked or "none",
             engine.auto,
         )
 
-    entry.runtime_data = engines
-    hass.data.setdefault(DOMAIN, {}).setdefault("stores", {})[entry.entry_id] = (
-        store,
-        _serialize,
+    entry.runtime_data = NecromancerData(
+        engines=engines, store=store, serialize=_serialize
     )
-    LOGGER.debug("Service set up with %s guarded device(s)", len(engines))
+    LOGGER.info("Service set up with %s guarded device(s)", len(engines))
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _reconcile_devices(hass, entry, engines)
     _reconcile_entities(hass, entry, engines)
+
+    # Validate guard configs once HA is started AND the platforms above have
+    # registered each guard's own view-entities — so the self-reference (feedback
+    # loop) check sees them even when a guard is added at runtime. async_at_started
+    # defers to "started" on boot (avoids false positives) and runs right away at
+    # runtime, by which point the entities exist (forward_entry_setups is awaited).
+    @callback
+    def _validate_configs(_hass: HomeAssistant) -> None:
+        for eng in engines.values():
+            eng._check_config(_hass)
+
+    entry.async_on_unload(async_at_started(hass, _validate_configs))
     return True
 
 
@@ -159,7 +291,11 @@ def _reconcile_entities(
     for subentry_id, engine in engines.items():
         if engine.allows_recovery:
             continue
-        for domain, key in (("switch", "auto_restart"), ("button", "recover")):
+        for domain, key in (
+            ("switch", "auto_restart"),
+            ("button", "recover"),
+            ("event", "recovery_event"),
+        ):
             eid = ent_reg.async_get_entity_id(domain, DOMAIN, f"{subentry_id}_{key}")
             if eid is not None:
                 LOGGER.debug("Removing %s (notify-only guard %s)", eid, engine.name)
@@ -230,15 +366,15 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: NecromancerConfigEntry
 ) -> bool:
     """Unload the service and stop all engines."""
+    data = entry.runtime_data
     # Flush runtime state before tearing down (engines still hold it), so a reload
     # (rename/reconfigure) does not read a stale store.
-    stores = hass.data.get(DOMAIN, {}).get("stores", {})
-    if (info := stores.pop(entry.entry_id, None)) is not None:
-        store, serialize = info
-        await store.async_save(serialize())
+    await data.store.async_save(data.serialize())
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        for engine in entry.runtime_data.values():
+        for engine in data.engines.values():
             await engine.async_stop()
+        if (fabric := hass.data.get(DOMAIN, {}).get("fabric")) is not None:
+            fabric.shutdown()
     return unload_ok

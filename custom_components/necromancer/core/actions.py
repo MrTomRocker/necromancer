@@ -17,7 +17,7 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.script import Script, async_validate_actions_config
 
-from .const import DOMAIN
+from ..const import DOMAIN
 
 
 async def async_validate(hass: HomeAssistant, action: list | dict | None) -> list:

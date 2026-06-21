@@ -40,6 +40,13 @@ class TemplateHealth(HealthSource):
     def watched_entities(self) -> list[str]:
         return []
 
+    def referenced_entities(self) -> list[str]:
+        """The entities this template reads (so the engine can spot a self-loop)."""
+        try:
+            return list(self._template.async_render_to_info().entities)
+        except TemplateError:
+            return []
+
     def evaluate(self) -> Health:
         try:
             result = self._template.async_render(parse_result=True)

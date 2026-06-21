@@ -9,6 +9,7 @@ the result is verified against the device's health entity is the engine's job.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 from homeassistant.core import HomeAssistant
 
@@ -20,8 +21,14 @@ class RecoveryDriver(ABC):
         self.hass = hass
         self.config = config
 
-    async def resolve(self) -> None:  # noqa: B027
-        """Optional: refresh internal mapping (e.g. poe_port MAC->port)."""
+    async def async_setup(self) -> Callable[[], None] | None:
+        """Optional: start watching what affects recovery; return an unsub.
+
+        A driver that must react to external changes can subscribe here. Default:
+        nothing to watch. (PoE id→port resolution and its last-known cache are
+        owned by the shared fabric, not the driver, so `poe_port` needs nothing.)
+        """
+        return None
 
     async def can_recover(self) -> tuple[bool, str]:
         """Guard right before recovering. Returns (allowed, reason)."""

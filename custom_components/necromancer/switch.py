@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NecromancerConfigEntry
-from .engine import DeviceEngine
+from .core.engine import DeviceEngine
 from .entity import NecromancerEntity
 
 
@@ -22,7 +23,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    for subentry_id, engine in entry.runtime_data.items():
+    for subentry_id, engine in entry.runtime_data.engines.items():
         if not engine.allows_recovery:
             continue  # notify-only guard has nothing to toggle
         async_add_entities(
@@ -35,6 +36,7 @@ class AutoRestartSwitch(NecromancerEntity, SwitchEntity):
 
     _attr_translation_key = "auto_restart"
     _attr_icon = "mdi:auto-fix"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
         super().__init__(engine, subentry_id, "auto_restart")

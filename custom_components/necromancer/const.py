@@ -15,8 +15,8 @@ SUBENTRY_TYPE_DEVICE = "device"
 STORAGE_VERSION = 1
 SAVE_DELAY = 5
 
-# Platforms with entities (Phase 1).
-PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "button"]
+# Platforms with entities.
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "button", "event"]
 
 # --- config sections ---
 CONF_HEALTH = "health"
@@ -30,8 +30,23 @@ CONF_MODE = "mode"
 MODE_RECOVER = "recover"
 MODE_NOTIFY = "notify"
 
+# Policy gate verdicts (returned by RecoveryPolicy.should_attempt, branched on by
+# the engine): observe = notify-only "problem detected"; auto_off = the per-guard
+# auto-recovery switch is off.
+REASON_OBSERVE = "observe"
+REASON_AUTO_OFF = "auto_off"
+
 # device (optional link to an existing HA device)
 CONF_DEVICE_ID = "device_id"
+
+# guard linking: other recover-guards this guard is grouped with. When any member
+# of the group enters recovery, the others FOLLOW into a hold (no competing
+# recovery) and re-validate afterwards. Stored per guard as a list of partner
+# subentry_ids; the relation is kept symmetric and clique-closed (a group), so
+# linking A-B where B-C exists groups {A,B,C}. The repair lifecycle is also fired
+# as an event so external automations can react.
+CONF_LINKED_GUARDS = "linked_guards"
+EVENT_GUARD_REPAIR = f"{DOMAIN}_guard_repair"
 
 # health source type (wizard step): an entity's state, or a Jinja template that
 # evaluates to true/false (continuous → checkable, so verify still works).
@@ -81,6 +96,27 @@ CONF_STATUS_OFF = "status_off"
 DEFAULT_PORT_OFF_TIMEOUT = 20
 DEFAULT_PORT_ON_TIMEOUT = 60
 
+# options flow: import/export the flat port list as YAML (bulk-edit escape hatch)
+CONF_IMPORT_MODE = "import_mode"
+IMPORT_MODE_MERGE = "merge"
+IMPORT_MODE_REPLACE = "replace"
+CONF_PORTS_YAML = "ports_yaml"
+CONF_PORT_SELECTION = "selection"
+
+# port-level repair service (necromancer.repair_poe_port) — the shared primitive
+# guards (and other automations) call to power-cycle a port by device id.
+SERVICE_REPAIR_POE_PORT = "repair_poe_port"
+ATTR_ID = "id"
+
+# Per-guard operator services (entity-targeted at the guard's status sensor).
+SERVICE_RESET = "reset"
+SERVICE_SNOOZE = "snooze"
+SERVICE_UNSNOOZE = "unsnooze"
+ATTR_DURATION = "duration"
+# Domain-level bulk services (no target — act on every guard; "maintenance mode").
+SERVICE_SNOOZE_ALL = "snooze_all"
+SERVICE_UNSNOOZE_ALL = "unsnooze_all"
+
 # driver (switch_cycle): power-cycle a switch (off → delay → on)
 CONF_SWITCH_ENTITY = "switch_entity"
 CONF_OFF_ON_DELAY = "off_on_delay"
@@ -106,6 +142,15 @@ CONF_HEALTH_CHECK = "health_check"
 # action sequence (script syntax) instead of fixed notify entities — the user
 # decides whether/how to notify. Variables: message, name, event, + event params.
 CONF_NOTIFY_ACTION = "notify_action"
+# After a repair attempt, reload the assigned device's integration (its config
+# entry) before VERIFY — only offered when a device is assigned. The delay gives
+# the just-repaired device time to come up before HA reconnects to it.
+CONF_RELOAD_ENTRY = "reload_entry"
+CONF_RELOAD_DELAY = "reload_delay"
+# A follower that recovers by following a group repair is silent on success by
+# default (one root-cause repair -> one notification, the leader's). Opt in per
+# guard to also notify the follower's success. Failures always notify.
+CONF_NOTIFY_FOLLOWER_SUCCESS = "notify_follower_success"
 
 # defaults (seconds, except counts/bools)
 DEFAULT_DEBOUNCE = 120
@@ -115,25 +160,32 @@ DEFAULT_MAX_ATTEMPTS = 2
 DEFAULT_AUTO_RESTART = True
 DEFAULT_HEALTHY_STATE = "on"
 DEFAULT_OFF_ON_DELAY = 5
+DEFAULT_RELOAD_DELAY = 10
 
-# User-facing notification message templates (str.format with name/attempt/max/...).
+# User-facing notification texts = the `event_text` (no name prefix; core/notify.py
+# prepends "<name>: " to build `message`). Phrased for TTS: numbers as words
+# ("1 von 2", not "1/2"), no slashes/parentheses, plural-correct via `{attempts}`
+# (computed in core/notify.py). str.format vars: {attempt}, {max}, {attempts}.
 # Kept in code rather than strings.json because Home Assistant's translation schema
-# has no "notify" category; notify.py picks the language with an English fallback.
+# has no "notify" category; core/notify.py picks the language with an English fallback.
 NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
     "en": {
-        "recovery_attempt": "{name}: Recovery {attempt}/{max}",
-        "recovery_success": "{name}: Recovery succeeded.",
-        "recovery_failed": "{name}: Recovery failed after {attempt} attempt(s).",
-        "recovery_blocked": "{name}: Recovery blocked — recovery action missing or not callable.",
-        "no_auto_recovery": "{name}: Problem detected, auto-recovery is disabled.",
-        "problem_detected": "{name}: Problem detected (notify only).",
+        "recovery_attempt": "Recovery attempt {attempt} of {max}.",
+        "recovery_success": "Recovery succeeded.",
+        "recovery_failed": "Recovery failed after {attempts}.",
+        "recovery_blocked": "Recovery blocked, the recovery action is missing or not callable.",
+        "no_auto_recovery": "Problem detected, auto-recovery is disabled.",
+        "problem_detected": "Problem detected.",
+        "linked_repair_failed": "Linked repair failed, still faulty.",
     },
     "de": {
-        "recovery_attempt": "{name}: Reparatur {attempt}/{max}",
-        "recovery_success": "{name}: Reparatur erfolgreich.",
-        "recovery_failed": "{name}: Reparatur fehlgeschlagen nach {attempt} Versuchen.",
-        "recovery_blocked": "{name}: Reparatur blockiert — Reparatur-Aktion fehlt oder ist nicht aufrufbar.",
-        "no_auto_recovery": "{name}: Problem erkannt, Auto-Reparatur ist deaktiviert.",
-        "problem_detected": "{name}: Problem erkannt (nur Benachrichtigung).",
+        "recovery_attempt": "Reparaturversuch {attempt} von {max}.",
+        "recovery_success": "Reparatur erfolgreich.",
+        "recovery_failed": "Reparatur fehlgeschlagen nach {attempts}.",
+        "recovery_blocked": "Reparatur blockiert, die Reparatur-Aktion fehlt oder ist nicht aufrufbar.",
+        "no_auto_recovery": "Problem erkannt, Auto-Reparatur ist deaktiviert.",
+        "problem_detected": "Problem erkannt.",
+        # linked_repair_failed: a follower escalates when the group repair failed.
+        "linked_repair_failed": "Gruppen-Reparatur fehlgeschlagen, weiterhin gestört.",
     },
 }

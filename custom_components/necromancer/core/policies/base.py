@@ -7,6 +7,8 @@ and the gates (time_window/rate_limit/dependency) arrive later.
 
 from __future__ import annotations
 
+from ...const import REASON_AUTO_OFF
+
 
 class RecoveryPolicy:
     """Decides whether an automatic recovery may start now.
@@ -24,5 +26,5 @@ class RecoveryPolicy:
     def should_attempt(self, *, auto_enabled: bool) -> tuple[bool, str]:
         """Return (allowed, reason). Base gate = the per-device auto switch."""
         if not auto_enabled:
-            return False, "auto_aus"
+            return False, REASON_AUTO_OFF
         return True, ""

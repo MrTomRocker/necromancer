@@ -65,7 +65,10 @@ Additional house rules:
 
 ## Testing
 
-See [`docs/arch/testing.md`](./docs/arch/testing.md) for the full test concept (invariants, three test levels, the dev-container live harness, and the pre-commit gates). At minimum, run the **P0** manual regression block after any change to the engine, persistence, health sources, or the config flow.
+See [`docs/arch/testing.md`](./docs/arch/testing.md) for the full test concept. In
+short: run the suites under `tests/` (`test_units`, `test_poe`, `test_engine`,
+`test_integration`) against a Home Assistant core checkout, plus the pre-commit
+gates (ruff check/format, `py_compile`, translation symmetry, `hassfest`).
 
 This custom component is developed inside a Home Assistant Core **dev container** with the package mounted live, so edits take effect without a redeploy. The container ships a standalone Home Assistant instance pre-configured for development.
 
