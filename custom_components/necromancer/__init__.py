@@ -127,12 +127,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
     ports = entry.options.get(CONF_PORTS, [])
     fabric.set_ports(ports, cache=stored.get("_poe_cache"))
     for port in ports:
-        LOGGER.info("PoE port loaded — %s", port)
+        LOGGER.debug("PoE port loaded — %s", port)
 
     if not hass.services.has_service(DOMAIN, SERVICE_REPAIR_POE_PORT):
 
         async def _repair_poe_port(call: ServiceCall) -> None:
-            await fabric.repair(call.data[ATTR_ID])
+            port_id = call.data[ATTR_ID]
+            LOGGER.info("repair_poe_port requested for %s", port_id)
+            await fabric.repair(port_id)
 
         hass.services.async_register(
             DOMAIN,
@@ -163,21 +165,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
         if subentry.subentry_type != SUBENTRY_TYPE_DEVICE:
             continue
         cfg = dict(subentry.data)
+        name = cfg.get(CONF_NAME, subentry.title)
         # poe_port guards resolve + cycle through the shared fabric (which owns the
         # port list), so nothing port-specific needs injecting into the driver here.
         linked = sorted(groups.get(subentry_id, {subentry_id}) - {subentry_id})
-        engine = _build_engine(
-            hass,
-            cfg.get(CONF_NAME, subentry.title),
-            cfg,
-            stored.get(subentry_id),
-            _save,
-            _rename_handler(hass, entry, subentry_id),
-            subentry_id,
-            linked,
-            engines,
-        )
-        await engine.async_start()
+        try:
+            engine = _build_engine(
+                hass,
+                name,
+                cfg,
+                stored.get(subentry_id),
+                _save,
+                _rename_handler(hass, entry, subentry_id),
+                subentry_id,
+                linked,
+                engines,
+            )
+            await engine.async_start()
+        except Exception:  # noqa: BLE001
+            # One malformed guard must not take down the whole entry (all guards):
+            # log which one and carry on with the rest.
+            LOGGER.exception("Failed to set up guard %r — skipping", name)
+            continue
         engines[subentry_id] = engine
         LOGGER.info(
             "Guard %r loaded — mode=%s, health=%s, strategy=%s (%s), "
@@ -198,7 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
         store,
         _serialize,
     )
-    LOGGER.debug("Service set up with %s guarded device(s)", len(engines))
+    LOGGER.info("Service set up with %s guarded device(s)", len(engines))
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

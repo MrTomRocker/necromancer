@@ -615,6 +615,34 @@ async def test_reload_device_entry_on_repair(hass, _):
         hass.config_entries.async_reload = orig
 
 
+async def test_escalate_blocked_no_recovered_error(hass, _):
+    import logging
+
+    records: list[tuple[int, str]] = []
+
+    class _Cap(logging.Handler):
+        def emit(self, record):
+            records.append((record.levelno, record.getMessage()))
+
+    cap = _Cap()
+    logger = logging.getLogger("custom_components.necromancer")
+    logger.addHandler(cap)
+    try:
+        eng = make(hass, FakeHealth(hass), StubDriver(hass))
+        # blocked (pre-flight refusal): no "could not be recovered after N" error
+        eng._escalate("recovery_blocked", reason="no port matches")
+        await hass.async_block_till_done()
+        assert not any("could not be recovered" in m for _, m in records), records
+        # genuine failure: ERROR with the give-up message
+        records.clear()
+        eng._escalate()
+        await hass.async_block_till_done()
+        assert any(lvl == logging.ERROR and "could not be recovered" in m
+                   for lvl, m in records), records
+    finally:
+        logger.removeHandler(cap)
+
+
 async def test_raising_driver_warns_on_retry_traces_on_final(hass, _):
     import logging
 

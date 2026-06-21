@@ -108,6 +108,7 @@ class DeviceEngine:
         self._verify_event: asyncio.Event | None = None
         self._cycle_task: asyncio.Task | None = None
         self._stopping = False
+        self._last_eval_log: tuple[Health, GState] | None = None
         self._listeners: list[Callable[[], None]] = []
 
         self._apply_persisted(persisted or {})
@@ -368,7 +369,11 @@ class DeviceEngine:
     @callback
     def _evaluate(self) -> None:
         h = self.health.evaluate()
-        LOGGER.debug("%s health=%s state=%s", self.name, h, self.state)
+        # Only log when the (health, state) pair actually changed — skips the
+        # duplicate evaluation at startup and repeated identical re-evaluations.
+        if (h, self.state) != self._last_eval_log:
+            LOGGER.debug("%s health=%s state=%s", self.name, h, self.state)
+            self._last_eval_log = (h, self.state)
         if h == Health.OK:
             self.last_seen = dt_util.utcnow()
         # While following a linked guard's repair, expect our device to drop too;
@@ -410,7 +415,7 @@ class DeviceEngine:
         allowed, reason = self.policy.should_attempt(auto_enabled=self.auto)
         if not allowed:
             if reason == REASON_OBSERVE:
-                LOGGER.info("%s problem detected (notify-only)", self.name)
+                LOGGER.warning("%s problem detected (notify-only)", self.name)
                 self.hass.async_create_task(self._notify("problem_detected"))
             else:
                 LOGGER.warning(
@@ -581,12 +586,19 @@ class DeviceEngine:
     def _recover_success(self, *, via_link: bool = False) -> None:
         self.recover_count += 1
         self.last_recover = dt_util.utcnow()
-        LOGGER.info(
-            "%s recovered after %s attempt(s) (total: %s)",
-            self.name,
-            self.attempt,
-            self.recover_count,
-        )
+        if via_link:
+            LOGGER.info(
+                "%s recovered via linked-guard repair (total: %s)",
+                self.name,
+                self.recover_count,
+            )
+        else:
+            LOGGER.info(
+                "%s recovered after %s attempt(s) (total: %s)",
+                self.name,
+                self.attempt,
+                self.recover_count,
+            )
         self.attempt = 0
         self._set_state(GState.COOLDOWN)
         # A follower that recovered by following a group repair stays silent on
@@ -610,9 +622,13 @@ class DeviceEngine:
             self._set_state(GState.OK)
 
     def _escalate(self, notify_key: str = "recovery_failed", **params: object) -> None:
-        LOGGER.error(
-            "%s could not be recovered after %s attempt(s)", self.name, self.attempt
-        )
+        if notify_key == "recovery_failed":
+            # Genuine give-up after real attempts. A pre-flight block
+            # (`recovery_blocked`) already logged its own WARNING with the reason,
+            # so don't add a misleading "could not be recovered after N attempts".
+            LOGGER.error(
+                "%s could not be recovered after %s attempt(s)", self.name, self.attempt
+            )
         params.setdefault("attempt", self.attempt)
         self._set_state(GState.ESCALATED)
         self.hass.async_create_task(self._notify(notify_key, **params))

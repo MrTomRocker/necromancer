@@ -200,7 +200,7 @@ class LinkCoordinator:
             if await eng._wait_health_ok(
                 eng._int(CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW)
             ):
-                LOGGER.info("%s: healthy after linked-guard repair", eng.name)
+                LOGGER.debug("%s: healthy after linked-guard repair", eng.name)
                 eng._recover_success(via_link=True)
             elif leader_success:
                 LOGGER.info(
