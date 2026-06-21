@@ -20,7 +20,6 @@ from homeassistant.helpers.event import (
     async_track_entity_registry_updated_event,
     async_track_state_change_event,
 )
-from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -101,7 +100,6 @@ class DeviceEngine:
 
         self._unsub_health: Callable[[], None] | None = None
         self._unsub_registry: Callable[[], None] | None = None
-        self._unsub_started: Callable[[], None] | None = None
         self._unsub_source: Callable[[], None] | None = None
         self._unsub_driver: Callable[[], None] | None = None
         self._unsub_timer: Callable[[], None] | None = None
@@ -155,9 +153,9 @@ class DeviceEngine:
             self.hass, watched, self._handle_registry_event
         )
         LOGGER.debug("Watching %s for %s", watched, self.name)
-        # Validate referenced entities/services once HA is fully started (so a
-        # service that simply hasn't registered yet during boot isn't flagged).
-        self._unsub_started = async_at_started(self.hass, self._check_config)
+        # Note: config validation (_check_config) is scheduled by __init__ after the
+        # platforms set up, so our own view-entities exist when the self-reference
+        # check runs (also runs once HA is started, to avoid boot false-positives).
         # Sources that track something else (e.g. a template) register here and
         # call _evaluate on change; state sources use watched_entities above.
         self._unsub_source = await self.health.async_setup(self._evaluate)
@@ -243,9 +241,6 @@ class DeviceEngine:
         if self._unsub_registry:
             self._unsub_registry()
             self._unsub_registry = None
-        if self._unsub_started:
-            self._unsub_started()
-            self._unsub_started = None
         if self._unsub_source:
             self._unsub_source()
             self._unsub_source = None

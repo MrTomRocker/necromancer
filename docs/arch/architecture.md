@@ -302,8 +302,19 @@ is no separate "mode" field — the notify-vs-recover choice *is* the strategy c
   The reacting field and the entity it follows must sit in the **same section**
   (a section renders its own nested `ha-form` that regenerates context from the
   section’s data).
-- **Own entities excluded.** Entity pickers exclude Necromancer’s own entities
-  (`exclude_entities`) so a guard can’t watch or switch its own status entities.
+- **Own entities excluded — scoped.** The switch/actuator/port pickers exclude
+  **all** Necromancer entities (`_own_entities`) — you never power-cycle a view
+  entity. The **health** picker excludes only **this guard's** entities
+  (`_own_guard_entities`, by `subentry_id` prefix), so a self-loop can't be picked
+  but **other** guards' `*_status` / `*_health` stay selectable — that's what
+  enables **supervisor / staged guards** (a template-health guard watching other
+  guards). A genuine self-reference is still caught by the feedback-loop check.
+- **Config validation timing.** `engine._check_config` (missing/disabled health,
+  driver errors, blind-template, self-reference loop) is scheduled **by `__init__`
+  after `async_forward_entry_setups`**, wrapped in `async_at_started`. So it runs
+  once HA is started *and* the guards' own view-entities are registered — the
+  self-reference check sees them even for a guard added at runtime (not just after
+  the next restart).
 - **Auto-recovery is not a setup field.** It is the per-guard runtime switch
   entity (Store-persisted); guards start with it on.
 - **Options flow (ports).** A button menu (`async_show_menu`) over the flat port

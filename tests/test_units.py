@@ -285,6 +285,24 @@ async def test_flow_rejects_empty_action(hass, _):
     assert captured.get("errors", {}).get(cf.CONF_ACTION) == "action_required", captured
 
 
+async def test_own_guard_entities_only_self(hass, _):
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.necromancer.config_flow_helpers.schemas import (
+        _own_guard_entities,
+    )
+
+    reg = er.async_get(hass)
+    a = reg.async_get_or_create("sensor", "necromancer", "GUARDA_status")
+    b = reg.async_get_or_create("sensor", "necromancer", "GUARDB_status")
+    own = _own_guard_entities(hass, "GUARDA")
+    # only this guard's entity is excluded; another guard's stays pickable
+    assert a.entity_id in own, own
+    assert b.entity_id not in own, own
+    # adding a new guard (no subentry yet) excludes nothing necromancer-wise
+    assert _own_guard_entities(hass, None) == []
+
+
 async def test_notify_resolve_tts_and_event_text(hass, _):
     from custom_components.necromancer.notify import _resolve
 

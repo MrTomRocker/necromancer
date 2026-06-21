@@ -188,6 +188,25 @@ partners (a single remaining link re-forms the group). Every repair is also publ
 `necromancer_guard_repair` event (`{guard, name, phase: start|done, success}`), so your own
 automations can react to it.
 
+## Supervisor guards (watch other guards)
+
+A guard's **template** health can reference **other guards'** own entities — their
+`sensor.<name>_status` (`ok` / `suspect` / `recovering` / `verify` / `cooldown` / `escalated`) or
+`binary_sensor.<name>_health`. That lets you **stage** recovery: small per-device guards try the
+cheap fix first; a higher-level **supervisor guard** watches their status and triggers a bigger
+recovery once several have given up.
+
+```jinja
+{# Supervisor: healthy UNLESS both bridge guards have escalated → then do the heavy fix #}
+{{ not (is_state('sensor.hue_eg_ping_status', 'escalated')
+        and is_state('sensor.hue_eg_lampen_status', 'escalated')) }}
+```
+
+Pair that template-health guard with a heavier strategy (e.g. Auto-PoE / a full power-cycle), and
+give it a longer **debounce** so the sub-guards finish their own attempts first. The health picker
+offers other guards' entities; only the guard's **own** entities are excluded (a self-reference
+would loop — that case is warned about).
+
 ## Services
 
 | Service | What it does |
@@ -203,6 +222,7 @@ Each row is **one guard** — a health source paired with a strategy:
 | Reboot a hung **gateway / hub** (Hue bridge, Zigbee/Z-Wave coordinator) on a smart plug | ping / reachability sensor | **Power-cycle a switch** *(with health-check)* |
 | Power-cycle a device behind a **Shelly** (or any smart plug) | ping / reachability sensor | **Power-cycle a switch** — the Shelly's `switch.*` entity |
 | Reboot a **PoE device** (access point, camera, IP phone) and find its port automatically | ping / reachability sensor | **Auto-PoE** |
+| **Escalate when sub-guards give up** — e.g. hard-reboot a bridge once two of its guards are `escalated` | *template* over other guards' `sensor.*_status` (supervisor guard) | **Auto-PoE** / power-cycle |
 | Recover a **PoE bridge with belt-and-braces detection** | *two linked guards* — a ping sensor **and** a "lamps unavailable" template | **Run an action** → `repair_poe_port` + reload, linked so only one cycles |
 | Redeploy a **stuck Node-RED flow** | template watching a heartbeat that stopped updating | **Run an action** → Node-RED restart/redeploy endpoint |
 | Repair an **automation stuck in the wrong state** | template comparing its state to the expected one | **Off/on actions** → restart that automation |

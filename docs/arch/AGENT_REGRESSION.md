@@ -643,12 +643,12 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 ### Entity-Selektor-Exclusion
 
-- [ ] **EX1 — Necromancer-eigene Entities aus Health-Picker ausgeschlossen** · `P1`
-  - **Prüft:** `switch.<slug>_auto_reparatur` & Co. tauchen im Health-Entity-Selektor NICHT auf (`exclude_entities`).
-  - **Files:** `config_flow.py` → `_own_entities` (Z.268-271, filtert `e.platform == DOMAIN`); `_entity_selector` (Z.274-280) setzt `cfg["exclude_entities"]=exclude`; verbaut in `_health_section` (Z.318), `_switch_fields` (Z.453), `_port_schema` Actuator/Id/Status (Z.694/703/720). Aufruf mit `exclude=_own_entities(self.hass)` in `async_step_device` (Z.909), `async_step_switch` (Z.954), `async_step_add_port` (Z.1301). `EntitySelector.serialize` führt `exclude_entities` mit (`homeassistant/helpers/selector.py` Z.999).
-  - **Treiber:** Mind. 1 Guard sicherstellen: `hub,sub=N.create_guard({"source_type":"state_based","name":"ExcludeMe","health":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"switch","switch_entity":"switch.test_template_switch","behavior":{"debounce":5,"cooldown":5}})`. Device-Step-Schema holen: Subentry-Flow starten (`{"handler":[N.hub_id(),"device"]}`→`fid`), `N._post_flow(fid,{"source_type":"state_based"})`→Step `device`. Im `data_schema` das Feld `state_check` (`type==expandable`) → dessen `schema` → Feld `entity_id` → `selector.entity.exclude_entities` lesen.
-  - **Assert:** `switch.excludeme_auto_reparatur`, `sensor.excludeme_status`, `binary_sensor.excludeme_gesundheit`, `button.excludeme_reparieren` sind in `exclude_entities` enthalten.
-  - **Cleanup:** Flow verwerfen (`requests.delete(.../subentries/flow/{fid},headers=N.H)`); `N.delete_subentry(hub,sub)`.
+- [ ] **EX1 — Health-Picker: nur EIGENE Guard-Entities ausgeschlossen, fremde wählbar** · `P1`
+  - **Prüft:** Im Health-Entity-Selektor sind nur die Entities **des gerade bearbeiteten** Guards ausgeschlossen (kein Self-Loop). Entities **anderer** Guards bleiben wählbar → **Supervisor-/Staged-Guards**. Beim Neuanlegen (noch keine subentry_id) wird necromancer-seitig nichts ausgeschlossen.
+  - **Files:** `config_flow_helpers/schemas.py` → `_own_guard_entities(hass, subentry_id)` (filtert `platform==DOMAIN AND unique_id.startswith(subentry_id)`; `[]` ohne id); im Health-Picker via `async_step_device` `exclude=_own_guard_entities(self.hass, self._own_subentry_id())`. (Switch/Port nutzen weiter `_own_entities` = ALLE necromancer-Entities, siehe EX2.) Automatisiert: `test_units.py::test_own_guard_entities_only_self`.
+  - **Treiber:** Zwei Guards „A"/„B" anlegen; Guard A **reconfigure**n, Device-Step-Schema holen, `state_check.entity_id.selector.entity.exclude_entities` lesen.
+  - **Assert:** Enthält `sensor.a_status` (eigene), aber **NICHT** `sensor.b_status` (fremde → wählbar).
+  - **Cleanup:** Flow verwerfen; Guards löschen.
 
 - [ ] **EX2 — Exclusion auch im Port-Formular (Actuator/Id/Status)** · `P1`
   - **Prüft:** Eigene Entities sind auch im PoE-Port-Add-Formular gefiltert.
@@ -782,7 +782,7 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 
 ### P0 — Health-Robustheit (event-getrieben)
 
-> Rename/Removal/Disabled werden über `async_track_entity_registry_updated_event` gefangen (engine.py `_handle_registry_event` Z. 224–247). Setup-Validierung läuft via `async_at_started` → `_check_config` (engine.py Z. 164–196).
+> Rename/Removal/Disabled werden über `async_track_entity_registry_updated_event` gefangen (engine.py `_handle_registry_event` Z. 224–247). Setup-Validierung: `__init__` plant `_check_config` je Engine via `async_at_started` **nach** `async_forward_entry_setups` (eigene View-Entities sind dann registriert → Self-Reference-Check greift auch beim Laufzeit-Anlegen).
 > Marker sind ENGLISCH (Logs immer englisch). Registry-Mutationen brauchen den WS-/registry-Pfad; `N.setstate` allein triggert KEIN Registry-Event. Der Testkit hat `N.ws(commands)` für direkte WS-Aufrufe (`config/entity_registry/{remove,update}`).
 > Hinweis: HR-2..5 mutieren die Entity-Registry. Verwende eine WEGWERF-Entität (z. B. einen extra angelegten `input_boolean`-Helfer), nicht die geteilten `input_boolean.test_*` (die andere Tests brauchen). Ist kein Wegwerf-Helfer verfügbar, bestätige NUR Marker + Codepfad (Files) und markiere den Live-Schritt als manuell.
 
@@ -830,7 +830,7 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 
 ### P0 — Config-Error-Logging (System-Log ERROR, kein Notify)
 
-> Driver-Config-Fehler kommen aus `driver.config_errors()` und werden in `_check_config` (engine.py Z. 178–179) als `"<Name>: <err>"` geloggt — via `async_at_started`, also erst wenn HA RUNNING ist.
+> Driver-Config-Fehler kommen aus `driver.config_errors()` und werden in `_check_config` als `"<Name>: <err>"` geloggt — die Validierung plant `__init__` via `async_at_started` nach dem Platform-Setup, also wenn HA RUNNING ist und die eigenen Entities existieren.
 
 - [ ] **CFG-1 — Valide Config → 0 Necromancer-ERRORs** · `P0`
   - **Prüft:** Bei ausschließlich validen Guards stehen keine necromancer-Config-Errors im Log.
@@ -860,7 +860,7 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Cleanup:** Subentry `"CfgAct"` + `N.call("input_boolean","turn_on",entity_id="input_boolean.test_6")`.
 
 - [ ] **CFG-5 — F2 Feedback-Loop-WARNING (Template referenziert eigene Entity)** · `P1`
-  - **Prüft:** Ein Template-Health, das eine der EIGENEN Guard-Entities referenziert, erzeugt eine Feedback-Loop-WARNING — aber erst nach einem Reload/Neustart (`_check_config` via `async_at_started` läuft erst, wenn die eigenen Entities registriert sind), kein Crash (engine.py Z. 183–196).
+  - **Prüft:** Ein Template-Health, das eine der EIGENEN Guard-Entities referenziert, erzeugt eine Feedback-Loop-WARNING — jetzt **auch beim Anlegen zur Laufzeit** (die Validierung wird in `__init__` NACH `async_forward_entry_setups` via `async_at_started` geplant → eigene Entities sind registriert), kein Crash. Referenzen auf **fremde** Guards lösen KEINE Warnung aus (Supervisor-Guards sind gewollt).
   - **Files:** engine.py Z. 183–196 — `own.intersection(self.health.referenced_entities())` → `LOGGER.warning("%s: health references its own entit(ies) %s — feedback loop; …")`.
   - **Treiber:** `N.create_guard({source_type:"template_based", name:"CfgLoop", health:{template:"{{ is_state('sensor.cfgloop_status','ok') }}"}, mode:"recover", strategy:"action_check", action:[{"service":"input_text.set_value","data":{"entity_id":"input_text.test_note","value":"x"}}], behavior:{debounce:3,cooldown:5,boot_window:3,max_attempts:1}})` → erster Load: KEINE Warnung erwartet → RESTART (oder Reload) → `N.wait(3)` → `N.log()`.
   - **Assert:** Nach Reload `N.log()` enthält `"CfgLoop: health references its own entit(ies)"` und `"feedback loop"`; HA bleibt RUNNING (`N.g("/api/config")["state"]=="RUNNING"`), 0 Tracebacks.

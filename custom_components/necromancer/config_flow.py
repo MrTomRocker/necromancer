@@ -60,6 +60,7 @@ from .config_flow_helpers.schemas import (
     _link_section,
     _notify_schema,
     _own_entities,
+    _own_guard_entities,
     _poe_defaults,
     _poe_schema,
     _port_schema,
@@ -276,7 +277,9 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
             data_schema=_device_schema(
                 defaults,
                 source_type=self._source_type,
-                exclude=_own_entities(self.hass),
+                # Only THIS guard's own entities — other guards' status/health stay
+                # pickable so you can build supervisor / staged guards.
+                exclude=_own_guard_entities(self.hass, self._own_subentry_id()),
             ),
             errors=errors,
         )

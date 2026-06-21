@@ -20,6 +20,7 @@ from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
 )
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -213,6 +214,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _reconcile_devices(hass, entry, engines)
     _reconcile_entities(hass, entry, engines)
+
+    # Validate guard configs once HA is started AND the platforms above have
+    # registered each guard's own view-entities — so the self-reference (feedback
+    # loop) check sees them even when a guard is added at runtime. async_at_started
+    # defers to "started" on boot (avoids false positives) and runs right away at
+    # runtime, by which point the entities exist (forward_entry_setups is awaited).
+    @callback
+    def _validate_configs(_hass: HomeAssistant) -> None:
+        for eng in engines.values():
+            eng._check_config(_hass)
+
+    entry.async_on_unload(async_at_started(hass, _validate_configs))
     return True
 
 

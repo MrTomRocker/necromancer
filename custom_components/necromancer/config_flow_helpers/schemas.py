@@ -183,9 +183,25 @@ def _flatten_sections(user_input: dict) -> dict:
 
 
 def _own_entities(hass: HomeAssistant) -> list[str]:
-    """Necromancer's own entities (excluded from the entity pickers)."""
+    """All of Necromancer's own entities (excluded from the switch/port pickers —
+    you never power-cycle a view-entity)."""
     ent_reg = er.async_get(hass)
     return [e.entity_id for e in ent_reg.entities.values() if e.platform == DOMAIN]
+
+
+def _own_guard_entities(hass: HomeAssistant, subentry_id: str | None) -> list[str]:
+    """Just THIS guard's own view-entities — excluded from its **health** picker so
+    a self-loop can't be picked, while OTHER guards' status/health entities stay
+    selectable (enables supervisor / staged guards). Empty while adding a new guard
+    (no subentry yet)."""
+    if not subentry_id:
+        return []
+    ent_reg = er.async_get(hass)
+    return [
+        e.entity_id
+        for e in ent_reg.entities.values()
+        if e.platform == DOMAIN and e.unique_id.startswith(subentry_id)
+    ]
 
 
 def _source_schema(default: str) -> vol.Schema:
