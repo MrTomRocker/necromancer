@@ -472,6 +472,7 @@ variables, so you decide whether and how to be notified:
 | `{{ event_text }}` | just the event text, **without** the name (e.g. *"Recovery succeeded."*) |
 | `{{ event }}` | the event key (`recovery_attempt`, `recovery_success`, `recovery_failed`, `recovery_blocked`, `no_auto_recovery`, `problem_detected`, `linked_repair_failed`) |
 | `{{ attempt }}` / `{{ max }}` / `{{ attempts }}` | recovery attempt count, max, and the plural-correct phrase (e.g. *"3 attempts"*) — where applicable |
+| `{{ reason }}` | why recovery was **blocked** or **failed** (e.g. a missing PoE port) — set for `recovery_blocked` / `recovery_failed`, empty otherwise |
 
 Variables that don't apply to an event arrive as an **empty string** (never undefined), so a
 template can reference `{{ attempt }}` directly without a `| default` guard.
