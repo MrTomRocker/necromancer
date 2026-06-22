@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
-LOGGER = logging.getLogger(__package__)
-
 DOMAIN = "necromancer"
 
 # Each guarded device is a config subentry of the single service entry.
@@ -166,8 +162,8 @@ DEFAULT_RELOAD_DELAY = 10
 # prepends "<name>: " to build `message`). Phrased for TTS: numbers as words
 # ("1 von 2", not "1/2"), no slashes/parentheses, plural-correct via `{attempts}`
 # (computed in core/notify.py). str.format vars: {attempt}, {max}, {attempts}.
-# Kept in code rather than strings.json because Home Assistant's translation schema
-# has no "notify" category; core/notify.py picks the language with an English fallback.
+# Kept in code rather than the translation files because Home Assistant's translation
+# schema has no "notify" category; core/notify.py picks the language with an English fallback.
 NOTIFY_MESSAGES: dict[str, dict[str, str]] = {
     "en": {
         "recovery_attempt": "Recovery attempt {attempt} of {max}.",

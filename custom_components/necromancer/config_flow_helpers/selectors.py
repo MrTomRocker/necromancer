@@ -19,6 +19,7 @@ from ..const import (
 
 
 def _seconds_selector(maximum: int) -> selector.NumberSelector:
+    """Build a 0..maximum seconds number box."""
     return selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=0,
@@ -42,12 +43,14 @@ class _LiveAttributeSelector(selector.AttributeSelector):
     """
 
     def __init__(self, entity_field: str) -> None:
+        """Bind the attribute picker to the named sibling entity field."""
         # The schema requires an entity_id; it is dropped in serialize() so the
         # context wins. The field name drives the reactive filter.
         super().__init__({"entity_id": "sensor.unknown"})
         self._entity_field = entity_field
 
     def serialize(self) -> dict:
+        """Emit the attribute selector plus its reactive filter_entity context."""
         return {
             "selector": {"attribute": {}},
             "context": {"filter_entity": self._entity_field},
@@ -65,11 +68,13 @@ class _LiveStateSelector(selector.StateSelector):
     """
 
     def __init__(self, entity_field: str, attribute_field: str) -> None:
+        """Bind the state picker to the named sibling entity + attribute fields."""
         super().__init__({"multiple": True})
         self._entity_field = entity_field
         self._attribute_field = attribute_field
 
     def serialize(self) -> dict:
+        """Emit the state selector plus its reactive entity/attribute filter context."""
         return {
             "selector": {"state": {"multiple": True}},
             "context": {
@@ -89,6 +94,7 @@ _STATUS_VALUE_SELECTOR = _LiveStateSelector(CONF_STATUS_ENTITY, CONF_STATUS_ATTR
 def _entity_selector(
     exclude: list[str], domain: list[str] | None = None
 ) -> selector.EntitySelector:
+    """Build an entity picker excluding the given entities, optionally domain-scoped."""
     cfg: dict = {"exclude_entities": exclude}
     if domain is not None:
         cfg["domain"] = domain

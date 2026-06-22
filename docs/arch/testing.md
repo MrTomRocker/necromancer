@@ -173,6 +173,6 @@ A clean run starts from an empty service entry (delete leftover `device` subentr
 - `ruff check` / `ruff format` (custom-component exceptions: `D10x` docstrings and
   `TID25x` absolute-import/`__future__` rules don’t apply).
 - `python -m py_compile` over all modules.
-- Translation symmetry: `strings.json` keys == `en.json` == `de.json`; placeholder
-  sets per key consistent; **no `{{`** in any description; every step has a
-  `description`.
+- Translation symmetry: `translations/en.json` keys == `de.json` (custom components
+  ship no `strings.json`); placeholder sets per key consistent; **no `{{`** in any
+  description; every step has a `description`.

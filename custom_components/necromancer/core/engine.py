@@ -11,8 +11,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
+import logging
 
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_registry import EventEntityRegistryUpdatedData
@@ -41,7 +42,6 @@ from ..const import (
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_RELOAD_DELAY,
     DOMAIN,
-    LOGGER,
     REASON_OBSERVE,
 )
 from .drivers import RecoveryDriver
@@ -50,6 +50,8 @@ from .links import LinkCoordinator
 from .notify import async_notify
 from .policies import RecoveryPolicy
 from .state import GState
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _noop() -> None:
@@ -69,12 +71,13 @@ class DeviceEngine:
         behavior: dict,
         link_device_id: str | None = None,
         persisted: dict | None = None,
-        save: Callable[[], None] | None = None,
+        save: CALLBACK_TYPE | None = None,
         on_health_renamed: Callable[[str], None] | None = None,
         subentry_id: str | None = None,
         linked_guards: list[str] | None = None,
         engines: dict[str, DeviceEngine] | None = None,
     ) -> None:
+        """Initialize the device engine."""
         self.hass = hass
         self.name = name
         self.health = health
@@ -104,16 +107,16 @@ class DeviceEngine:
         self._snoozed = False
         self._snooze_until: datetime | None = None
 
-        self._unsub_health: Callable[[], None] | None = None
-        self._unsub_registry: Callable[[], None] | None = None
-        self._unsub_source: Callable[[], None] | None = None
-        self._unsub_driver: Callable[[], None] | None = None
-        self._unsub_timer: Callable[[], None] | None = None
+        self._unsub_health: CALLBACK_TYPE | None = None
+        self._unsub_registry: CALLBACK_TYPE | None = None
+        self._unsub_source: CALLBACK_TYPE | None = None
+        self._unsub_driver: CALLBACK_TYPE | None = None
+        self._unsub_timer: CALLBACK_TYPE | None = None
         self._verify_event: asyncio.Event | None = None
         self._cycle_task: asyncio.Task | None = None
         self._stopping = False
         self._last_eval_log: tuple[Health, GState] | None = None
-        self._listeners: list[Callable[[], None]] = []
+        self._listeners: list[CALLBACK_TYPE] = []
         # Typed lifecycle events for the event entity: (event_type, data).
         self._event_listeners: list[Callable[[str, dict], None]] = []
 
@@ -160,6 +163,11 @@ class DeviceEngine:
 
     # ---------- lifecycle ----------
     async def async_start(self) -> None:
+        """Subscribe to health/registry/source/driver inputs and seed initial state.
+
+        Wires up all event sources, re-arms a persisted snooze, then runs the first
+        evaluation so the live state is derived from current health on startup.
+        """
         watched = self.health.watched_entities
         self._unsub_health = async_track_state_change_event(
             self.hass, watched, self._handle_health_event
@@ -248,6 +256,11 @@ class DeviceEngine:
                 )
 
     async def async_stop(self) -> None:
+        """Tear down the engine: unsubscribe, cancel timers, and abort any cycle.
+
+        Sets `_stopping` first so a cancelled recovery cycle's finally block won't
+        report a half-finished repair to linked partners.
+        """
         LOGGER.debug("Stopping engine for %s", self.name)
         # Mark teardown first: the cancelled cycle's finally must NOT escalate
         # linked partners off a half-finished repair, and our link state is reset
@@ -274,6 +287,11 @@ class DeviceEngine:
     def _handle_registry_event(
         self, event: Event[EventEntityRegistryUpdatedData]
     ) -> None:
+        """Track the health entity's registry changes (removal, rename, disable).
+
+        Logs removal/disable (guard goes blind) and forwards a rename to the
+        owner so the watch can be re-pointed at the new entity id.
+        """
         data = event.data
         eid = data["entity_id"]
         if data["action"] == "remove":
@@ -296,7 +314,8 @@ class DeviceEngine:
                 LOGGER.info("%s: health entity %s re-enabled", self.name, eid)
 
     # ---------- entity glue ----------
-    def add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
+    def add_listener(self, cb: CALLBACK_TYPE) -> CALLBACK_TYPE:
+        """Subscribe an entity to state-refresh callbacks. Returns an unsubscribe."""
         self._listeners.append(cb)
 
         def _remove() -> None:
@@ -307,10 +326,11 @@ class DeviceEngine:
 
     @callback
     def _emit(self) -> None:
+        """Notify subscribed entities to refresh their state."""
         for cb in list(self._listeners):
             cb()
 
-    def add_event_listener(self, cb: Callable[[str, dict], None]) -> Callable[[], None]:
+    def add_event_listener(self, cb: Callable[[str, dict], None]) -> CALLBACK_TYPE:
         """Subscribe to typed lifecycle events (the event entity). Returns unsub."""
         self._event_listeners.append(cb)
 
@@ -322,10 +342,16 @@ class DeviceEngine:
 
     @callback
     def _fire_event(self, event_type: str, **data: object) -> None:
+        """Dispatch a typed lifecycle event to the event-entity subscribers."""
         for cb in list(self._event_listeners):
             cb(event_type, data)
 
     def _set_state(self, state: GState) -> None:
+        """Transition to `state`, persisting + logging only on an actual change.
+
+        Always emits so entities refresh even on a no-op set (e.g. attribute-only
+        updates).
+        """
         if state != self.state:
             self.state = state
             LOGGER.debug("%s entered state %s", self.name, state)
@@ -333,6 +359,7 @@ class DeviceEngine:
         self._emit()
 
     def _int(self, key: str, default: int) -> int:
+        """Read an int behavior option, falling back to `default` if unset/invalid."""
         try:
             return int(self.behavior.get(key, default))
         except (TypeError, ValueError):
@@ -340,6 +367,7 @@ class DeviceEngine:
 
     @property
     def max_attempts(self) -> int:
+        """Return the configured maximum number of recovery attempts per cycle."""
         return self._int(CONF_MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS)
 
     @property
@@ -400,6 +428,7 @@ class DeviceEngine:
 
     @callback
     def _snooze_done(self, _now) -> None:
+        """Resume guarding when the snooze timer elapses, re-deriving from health."""
         if not self._snoozed:
             return
         LOGGER.info("%s snooze elapsed — resuming", self.name)
@@ -408,6 +437,7 @@ class DeviceEngine:
         self._evaluate()
 
     def _clear_snooze(self) -> None:
+        """Clear snooze flags and cancel the pending snooze timer."""
         self._snoozed = False
         self._snooze_until = None
         self._cancel_timer()
@@ -428,6 +458,7 @@ class DeviceEngine:
         self._unsub_timer = async_call_later(self.hass, remaining, self._snooze_done)
 
     def _cancel_timer(self) -> None:
+        """Cancel the single shared lifecycle timer if one is armed."""
         if self._unsub_timer:
             self._unsub_timer()
             self._unsub_timer = None
@@ -441,36 +472,55 @@ class DeviceEngine:
     # engine surface — and the tests — stable while the protocol moves out.
     @property
     def _following(self) -> bool:
+        """Return whether we are holding while a linked partner repairs."""
         return self.links.following
 
     @_following.setter
     def _following(self, value: bool) -> None:
+        """Set whether we are following a linked partner's repair."""
         self.links.following = value
 
     @property
     def _leader(self) -> str | None:
+        """Return the subentry id of the partner we are currently following, if any."""
         return self.links.leader
 
     @_leader.setter
     def _leader(self, value: str | None) -> None:
+        """Set the subentry id of the partner we are following."""
         self.links.leader = value
 
     def _find_repairing_partner(self) -> DeviceEngine | None:
+        """Return a linked partner already in a recovery cycle, if one exists."""
         return self.links.find_repairing_partner()
 
     def _on_partner_repair_start(self, leader_id: str) -> None:
+        """Enter follow mode: hold our own recovery while `leader_id` repairs."""
         self.links.on_partner_repair_start(leader_id)
 
     def _on_partner_repair_done(self, leader_id: str, success: bool) -> None:
+        """Exit follow mode and re-evaluate once `leader_id` finishes repairing.
+
+        On a successful partner repair our device is expected to come back too;
+        on failure we resume our own cycle from the held state.
+        """
         self.links.on_partner_repair_done(leader_id, success)
 
     # ---------- health handling ----------
     @callback
     def _handle_health_event(self, event) -> None:
+        """Re-evaluate the state machine when a watched health entity changes."""
         self._evaluate()
 
     @callback
     def _evaluate(self) -> None:
+        """Drive the state machine from the current health verdict.
+
+        The central dispatcher: honours snooze/follow holds, records last-seen and
+        the VERIFY wakeup on health OK, and fires the steady-state edge transitions
+        (OK->SUSPECT on unhealthy, SUSPECT/ESCALATED->OK on recovery). Recovery
+        cycle transitions are driven by the cycle task, not here.
+        """
         # Snoozed = operator-suspended: ignore health entirely, hold the state.
         if self._snoozed:
             self._emit()
@@ -504,6 +554,11 @@ class DeviceEngine:
 
     # ---------- transitions ----------
     def _enter_suspect(self) -> None:
+        """Enter SUSPECT and arm the debounce timer before committing to recovery.
+
+        The debounce window lets a transient blip self-resolve, avoiding a needless
+        recovery cycle for a flap.
+        """
         debounce = self._int(CONF_DEBOUNCE, DEFAULT_DEBOUNCE)
         LOGGER.info("%s unhealthy, waiting %ss (debounce)", self.name, debounce)
         self._set_state(GState.SUSPECT)
@@ -512,6 +567,12 @@ class DeviceEngine:
 
     @callback
     def _debounce_done(self, _now) -> None:
+        """Decide what to do when the SUSPECT debounce window elapses.
+
+        Settles back to OK if health recovered; otherwise honours the policy gate
+        (escalate / notify-only when recovery isn't allowed), defers to a partner
+        already repairing (follow), or launches our own recovery cycle.
+        """
         self._unsub_timer = None
         if self.state != GState.SUSPECT:
             return
@@ -549,6 +610,12 @@ class DeviceEngine:
         self._start_cycle()
 
     def _start_cycle(self) -> None:
+        """Claim RECOVERING synchronously and spawn the recovery cycle task.
+
+        The state is set before the task runs so a partner debouncing in the same
+        tick sees us as the leader and follows rather than launching a competing
+        recovery. No-op if a cycle is already running.
+        """
         if self._cycle_task and not self._cycle_task.done():
             return
         # Claim the leader role *synchronously* (before the cycle task runs) so a
@@ -572,6 +639,15 @@ class DeviceEngine:
         self._start_cycle()
 
     async def _run_recovery_cycle(self) -> None:
+        """Run the attempt/verify retry loop that repairs the device.
+
+        Each iteration runs one driver recovery, optionally reloads the device's
+        integration, then either short-circuits to success (no health-check) or
+        enters VERIFY and waits for health within the boot window. Succeeds via
+        _recover_success, retries until max_attempts, or _escalate on a block /
+        exhausted attempts. Notifies the link group of start/done so partners hold
+        during the repair — but never reports done on a stop-driven cancellation.
+        """
         # Tell our group we're repairing so partners follow (hold) instead of
         # launching their own recovery for the same root cause.
         self.links.notify_start()
@@ -596,7 +672,7 @@ class DeviceEngine:
                     return
                 try:
                     await self.driver.recover()
-                except Exception as err:  # noqa: BLE001
+                except Exception as err:
                     # The action raised (e.g. a missing service): a failed attempt,
                     # never a success — retry or escalate, even without a check.
                     if self.attempt >= self.max_attempts:
@@ -673,12 +749,18 @@ class DeviceEngine:
             )
             try:
                 await self.hass.config_entries.async_reload(entry_id)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 LOGGER.exception(
                     "%s: failed to reload config entry %s", self.name, entry_id
                 )
 
     async def _wait_health_ok(self, timeout: int) -> bool:
+        """Wait up to `timeout`s for health to read OK during VERIFY.
+
+        Returns immediately if already OK; otherwise waits for the event _evaluate
+        sets on the first OK reading, re-checking once on timeout to avoid missing a
+        verdict that landed at the deadline.
+        """
         if self.health.evaluate() == Health.OK:
             return True
         self._verify_event = asyncio.Event()
@@ -691,6 +773,12 @@ class DeviceEngine:
             self._verify_event = None
 
     def _recover_success(self, *, via_link: bool = False) -> None:
+        """Record a successful repair and move into the COOLDOWN settling window.
+
+        Bumps stats, resets the attempt counter, fires the recovered event, and arms
+        the cooldown timer. `via_link` marks a recovery that rode a partner's repair,
+        which stays silent on success unless the guard opts in.
+        """
         self.recover_count += 1
         self.last_recover = dt_util.utcnow()
         if via_link:
@@ -723,6 +811,7 @@ class DeviceEngine:
 
     @callback
     def _cooldown_done(self, _now) -> None:
+        """Leave COOLDOWN: settle to OK, or re-enter SUSPECT if still unhealthy."""
         self._unsub_timer = None
         if self.state != GState.COOLDOWN:
             return
@@ -732,6 +821,12 @@ class DeviceEngine:
             self._set_state(GState.OK)
 
     def _escalate(self, notify_key: str = "recovery_failed", **params: object) -> None:
+        """Enter the terminal ESCALATED state and notify of the give-up/block.
+
+        Reached when attempts are exhausted or a pre-flight check blocks recovery;
+        the guard stays escalated until health returns or an operator reset clears
+        it. The notify key distinguishes a genuine failure from a pre-flight block.
+        """
         if notify_key == "recovery_failed":
             # Genuine give-up after real attempts. A pre-flight block
             # (`recovery_blocked`) already logged its own WARNING with the reason,
@@ -749,6 +844,7 @@ class DeviceEngine:
         self.hass.async_create_task(self._notify(notify_key, **params))
 
     async def _notify(self, key: str, **params: object) -> None:
+        """Dispatch a lifecycle notification through the configured notify action."""
         await async_notify(
             self.hass, self.name, self.behavior.get(CONF_NOTIFY_ACTION), key, **params
         )

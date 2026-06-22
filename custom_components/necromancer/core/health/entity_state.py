@@ -21,6 +21,7 @@ from .base import Health, HealthSource
 
 
 def _as_set(raw: object) -> set[str]:
+    """Coerce a bare string or a list/tuple/set into a set of strings."""
     if raw is None:
         return set()
     if isinstance(raw, (list, tuple, set)):
@@ -33,6 +34,7 @@ class EntityStateHealth(HealthSource):
 
     @property
     def entity_id(self) -> str:
+        """Return the entity whose state/attribute is read."""
         return self.config["entity_id"]
 
     @property
@@ -42,6 +44,7 @@ class EntityStateHealth(HealthSource):
 
     @property
     def on_values(self) -> set[str]:
+        """Return the values meaning healthy (legacy `healthy_state` fallback)."""
         return _as_set(self.config.get("on_value")) or _as_set(
             self.config.get("healthy_state", "on")
         )
@@ -53,9 +56,11 @@ class EntityStateHealth(HealthSource):
 
     @property
     def watched_entities(self) -> list[str]:
+        """Return the single entity to subscribe to for change events."""
         return [self.entity_id]
 
     def evaluate(self) -> Health:
+        """Map the entity state/attribute to OK / UNHEALTHY / UNKNOWN."""
         state = self.hass.states.get(self.entity_id)
         if state is None:
             return Health.UNKNOWN
@@ -81,6 +86,7 @@ class EntityStateHealth(HealthSource):
         return Health.UNKNOWN
 
     def describe(self) -> str:
+        """Return a short human description for diagnostics."""
         if self.source == "state":
             return self.entity_id
         return f"{self.entity_id}[{self.source}]"

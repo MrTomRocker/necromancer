@@ -18,12 +18,16 @@ The sequence runs detached so a user delay never stalls the engine.
 
 from __future__ import annotations
 
+import logging
+
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
 
-from ..const import LOGGER, NOTIFY_MESSAGES
+from ..const import NOTIFY_MESSAGES
 from .actions import async_run
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _resolve(lang: str, name: str, key: str, params: dict) -> tuple[str, str]:
@@ -75,7 +79,7 @@ async def async_notify(
             await async_run(hass, action, f"{name} notify", variables)
         except vol.Invalid as err:
             LOGGER.error("Notify action invalid for %s: %s", name, err)
-        except Exception:  # noqa: BLE001
+        except Exception:
             LOGGER.exception("Notify action failed for %s", name)
 
     hass.async_create_task(_run(), f"necromancer notify {name}")

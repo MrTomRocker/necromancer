@@ -21,6 +21,7 @@ class RecoveryPolicy:
     allows_recovery: bool = True
 
     def __init__(self, config: dict) -> None:
+        """Store the guard's policy config."""
         self.config = config
 
     def should_attempt(self, *, auto_enabled: bool) -> tuple[bool, str]:

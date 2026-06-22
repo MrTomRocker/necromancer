@@ -9,19 +9,19 @@ the result is verified against the device's health entity is the engine's job.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
 
 class RecoveryDriver(ABC):
     """Performs a recovery action for a guarded device."""
 
     def __init__(self, hass: HomeAssistant, config: dict) -> None:
+        """Store the hass instance and the guard's driver config."""
         self.hass = hass
         self.config = config
 
-    async def async_setup(self) -> Callable[[], None] | None:
+    async def async_setup(self) -> CALLBACK_TYPE | None:
         """Optional: start watching what affects recovery; return an unsub.
 
         A driver that must react to external changes can subscribe here. Default:

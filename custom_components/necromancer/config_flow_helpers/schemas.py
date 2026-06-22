@@ -183,17 +183,18 @@ def _flatten_sections(user_input: dict) -> dict:
 
 
 def _own_entities(hass: HomeAssistant) -> list[str]:
-    """All of Necromancer's own entities (excluded from the switch/port pickers —
-    you never power-cycle a view-entity)."""
+    """Return all Necromancer-owned entities (never power-cycle a view-entity)."""
     ent_reg = er.async_get(hass)
     return [e.entity_id for e in ent_reg.entities.values() if e.platform == DOMAIN]
 
 
 def _own_guard_entities(hass: HomeAssistant, subentry_id: str | None) -> list[str]:
-    """Just THIS guard's own view-entities — excluded from its **health** picker so
-    a self-loop can't be picked, while OTHER guards' status/health entities stay
-    selectable (enables supervisor / staged guards). Empty while adding a new guard
-    (no subentry yet)."""
+    """Return just THIS guard's own view-entities (for the health-picker exclusion).
+
+    Excluded from its **health** picker so a self-loop can't be picked, while OTHER
+    guards' status/health entities stay selectable (enables supervisor / staged
+    guards). Empty while adding a new guard (no subentry yet).
+    """
     if not subentry_id:
         return []
     ent_reg = er.async_get(hass)
@@ -205,6 +206,7 @@ def _own_guard_entities(hass: HomeAssistant, subentry_id: str | None) -> list[st
 
 
 def _source_schema(default: str) -> vol.Schema:
+    """Build the health-source-type selection schema (entity state vs template)."""
     return vol.Schema(
         {
             vol.Required(CONF_SOURCE_TYPE, default=default): selector.SelectSelector(
@@ -219,6 +221,7 @@ def _source_schema(default: str) -> vol.Schema:
 
 
 def _source_type_of(data: dict) -> str:
+    """Derive the source type (template vs state) from a stored guard's health."""
     is_template = data.get(CONF_HEALTH, {}).get(CONF_TYPE) == "template"
     return SOURCE_TEMPLATE if is_template else SOURCE_STATE
 
@@ -248,6 +251,7 @@ def _health_section(d: dict, *, source_type: str, exclude: list[str]) -> dict:
 def _device_schema(
     d: dict | None = None, *, source_type: str = SOURCE_STATE, exclude: list[str] = ()
 ) -> vol.Schema:
+    """Build the device step schema: name + health block + assigned device."""
     d = d or {}
     return vol.Schema(
         {
@@ -267,6 +271,7 @@ def _device_schema(
 
 
 def _strategy_schema(default: str) -> vol.Schema:
+    """Build the recovery-strategy selection schema (notify-only + strategies)."""
     return vol.Schema(
         {
             vol.Required(CONF_STRATEGY, default=default): selector.SelectSelector(
@@ -300,11 +305,12 @@ def _notification_section(d: dict) -> dict:
 def _link_section(
     options: list[dict], default: list[str], *, notify_success: bool = False
 ) -> dict:
-    """Collapsed multi-select of group partners (other recover guards) + the
-    'notify the follower's success' toggle.
+    """Build the collapsed 'linked guards' multi-select section.
 
-    Returns an empty dict when there are no other recover guards to link to, so
-    the section is simply omitted (an empty SelectSelector would be pointless).
+    A multi-select of group partners (other recover guards) plus the 'notify the
+    follower's success' toggle. Returns an empty dict when there are no other
+    recover guards to link to, so the section is simply omitted (an empty
+    SelectSelector would be pointless).
     """
     if not options:
         return {}
@@ -347,6 +353,7 @@ def _reload_section(d: dict) -> dict:
 
 
 def _debounce_field(d: dict) -> dict:
+    """Build the debounce-seconds field (how long down before acting)."""
     return {
         vol.Required(
             CONF_DEBOUNCE, default=d.get(CONF_DEBOUNCE, DEFAULT_DEBOUNCE)
@@ -388,6 +395,7 @@ def _behavior_section(d: dict, *, check: bool) -> dict:
 
 
 def _switch_fields(d: dict, exclude: list[str]) -> dict:
+    """Build the switch-entity + off/on delay fields for the switch strategy."""
     return {
         vol.Required(
             CONF_SWITCH_ENTITY, default=d.get(CONF_SWITCH_ENTITY, vol.UNDEFINED)
@@ -401,6 +409,7 @@ def _switch_fields(d: dict, exclude: list[str]) -> dict:
 def _switch_schema(
     d: dict | None = None, *, check: bool, exclude: list[str] = (), reload_block=None
 ) -> vol.Schema:
+    """Build the switch power-cycle recovery form schema."""
     d = d or {}
     return vol.Schema(
         {
@@ -454,6 +463,7 @@ def _actions_schema(
 
 
 def _notify_schema(d: dict | None = None) -> vol.Schema:
+    """Build the notify-only form schema (debounce + alert action)."""
     d = d or {}
     return vol.Schema({**_debounce_field(d), **_notification_section(d)})
 
@@ -468,6 +478,7 @@ def _watch_config(block: dict) -> dict:
 
 
 def _build_driver(step2: dict, strategy: str) -> dict:
+    """Build the stored driver block for the chosen recovery strategy."""
     if strategy == STRATEGY_POE:
         return {CONF_TYPE: "poe_port", CONF_EXPECTED_ID: step2[CONF_EXPECTED_ID]}
     if strategy in (STRATEGY_ACTION, STRATEGY_ACTION_CHECK):
@@ -487,6 +498,7 @@ def _build_driver(step2: dict, strategy: str) -> dict:
 
 
 def _build_data(step1: dict, step2: dict, strategy: str) -> dict:
+    """Assemble the full stored subentry data from the two wizard steps."""
     step1 = _flatten_sections(step1)
     step2 = _flatten_sections(step2)
     notify_only = strategy == MODE_NOTIFY
@@ -533,6 +545,7 @@ def _build_data(step1: dict, step2: dict, strategy: str) -> dict:
 
 
 def _current_strategy(data: dict) -> str:
+    """Derive the wizard strategy key from a stored guard's driver + check flag."""
     if data.get(CONF_POLICY, {}).get(CONF_TYPE) == MODE_NOTIFY:
         return MODE_NOTIFY
     driver = data.get(CONF_DRIVER, {})
@@ -558,6 +571,7 @@ def _watch_defaults(block: dict) -> dict:
 
 
 def _health_defaults(data: dict) -> dict:
+    """Pre-fill the device step from a stored guard (name + health + device)."""
     health = data.get(CONF_HEALTH, {})
     return {
         CONF_NAME: data.get(CONF_NAME, ""),
@@ -569,6 +583,7 @@ def _health_defaults(data: dict) -> dict:
 
 
 def _behavior_defaults(data: dict) -> dict:
+    """Pre-fill the timing/retry/notify fields from a stored guard's behavior."""
     b = data.get(CONF_BEHAVIOR, {})
     return {
         CONF_DEBOUNCE: b.get(CONF_DEBOUNCE, DEFAULT_DEBOUNCE),
@@ -580,6 +595,7 @@ def _behavior_defaults(data: dict) -> dict:
 
 
 def _switch_defaults(data: dict) -> dict:
+    """Pre-fill the switch strategy form from a stored guard."""
     drv = data.get(CONF_DRIVER, {})
     return {
         **_behavior_defaults(data),
@@ -589,6 +605,7 @@ def _switch_defaults(data: dict) -> dict:
 
 
 def _action_defaults(data: dict) -> dict:
+    """Pre-fill the single-action strategy form from a stored guard."""
     return {
         **_behavior_defaults(data),
         CONF_ACTION: data.get(CONF_DRIVER, {}).get(CONF_ACTION),
@@ -596,6 +613,7 @@ def _action_defaults(data: dict) -> dict:
 
 
 def _actions_defaults(data: dict) -> dict:
+    """Pre-fill the off/on action-pair strategy form from a stored guard."""
     drv = data.get(CONF_DRIVER, {})
     return {
         **_behavior_defaults(data),
@@ -606,6 +624,7 @@ def _actions_defaults(data: dict) -> dict:
 
 
 def _poe_defaults(data: dict) -> dict:
+    """Pre-fill the PoE-port strategy form from a stored guard."""
     drv = data.get(CONF_DRIVER, {})
     return {
         **_behavior_defaults(data),
@@ -614,6 +633,7 @@ def _poe_defaults(data: dict) -> dict:
 
 
 def _poe_schema(d: dict | None = None, *, reload_block=None) -> vol.Schema:
+    """Build the PoE-port recovery form schema (expected id + behaviour)."""
     d = d or {}
     return vol.Schema(
         {

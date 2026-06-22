@@ -12,14 +12,17 @@ splits it.
 from __future__ import annotations
 
 from collections.abc import Iterator
+import logging
 from typing import TYPE_CHECKING
 
-from ..const import CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW, EVENT_GUARD_REPAIR, LOGGER
+from ..const import CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW, EVENT_GUARD_REPAIR
 from .health import Health
 from .state import GState
 
 if TYPE_CHECKING:
     from .engine import DeviceEngine
+
+LOGGER = logging.getLogger(__name__)
 
 
 def link_components(links: dict[str, set[str]], valid: set[str]) -> dict[str, set[str]]:
@@ -76,6 +79,7 @@ class LinkCoordinator:
         linked: list[str] | None,
         engines: dict[str, DeviceEngine] | None,
     ) -> None:
+        """Bind the coordinator to its engine, partner ids, and engine registry."""
         self._engine = engine
         self._linked = linked or []
         self._engines = engines if engines is not None else {}

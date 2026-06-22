@@ -20,6 +20,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the binary_sensor platform from a config entry."""
     for subentry_id, engine in entry.runtime_data.engines.items():
         async_add_entities(
             [HealthBinarySensor(engine, subentry_id)], config_subentry_id=subentry_id
@@ -33,12 +34,15 @@ class HealthBinarySensor(NecromancerEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
+        """Initialize the health binary sensor."""
         super().__init__(engine, subentry_id, "health")
 
     @property
     def available(self) -> bool:
+        """Return whether the health verdict is known."""
         return self._engine.health.evaluate() != Health.UNKNOWN
 
     @property
     def is_on(self) -> bool:
+        """Return true if the device is healthy."""
         return self._engine.health.evaluate() == Health.OK

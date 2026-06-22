@@ -26,6 +26,7 @@ This file stays a single module at the integration root (hassfest requires
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -93,7 +94,6 @@ from .const import (
     DOMAIN,
     IMPORT_MODE_MERGE,
     IMPORT_MODE_REPLACE,
-    LOGGER,
     MODE_NOTIFY,
     SOURCE_STATE,
     STRATEGY_ACTION,
@@ -106,6 +106,8 @@ from .const import (
     SUBENTRY_TYPE_DEVICE,
 )
 from .core.links import group_of
+
+LOGGER = logging.getLogger(__name__)
 
 
 class NecromancerConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -120,6 +122,7 @@ class NecromancerConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Create the single blank service entry (one per install)."""
         if self._async_current_entries():
             return self.async_abort(reason="already_configured")
         return self.async_create_entry(title="Necromancer", data={})
@@ -129,11 +132,13 @@ class NecromancerConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Expose the `device` subentry flow used to add guarded devices."""
         return {SUBENTRY_TYPE_DEVICE: DeviceSubentryFlow}
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow that manages the flat PoE port list."""
         return NecromancerOptionsFlow()
 
 
@@ -141,6 +146,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     """Add or reconfigure one guarded device. Add and reconfigure share steps."""
 
     def __init__(self) -> None:
+        """Init the device subentry flow with add-mode defaults."""
         self._reconfig = False
         self._source_type = SOURCE_STATE
         self._step1: dict = {}
@@ -154,6 +160,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         )
 
     def _reconfig_data(self) -> dict:
+        """Return the stored data of the subentry being reconfigured."""
         return self._get_reconfigure_subentry().data
 
     def _name_taken(self, name: str) -> bool:
@@ -180,6 +187,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         }
 
     def _own_subentry_id(self) -> str | None:
+        """Return the edited guard's subentry id, or None while adding."""
         return self._get_reconfigure_subentry().subentry_id if self._reconfig else None
 
     def _link_options(self) -> list[dict]:
@@ -218,9 +226,11 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
         return schema.extend(section_dict) if section_dict else schema
 
     def _reload_block(self) -> dict:
-        """The 'reload assigned device integration' section — only when a device
-        was set in the device step (nothing to reload otherwise). Inserted before
-        the notification section by the strategy schema."""
+        """Build the optional 'reload assigned device integration' section.
+
+        Only present when a device was set in the device step (nothing to reload
+        otherwise). Inserted before the notification section by the strategy schema.
+        """
         if not self._step1.get(CONF_DEVICE_ID):
             return {}
         d = self._reconfig_data().get(CONF_BEHAVIOR, {}) if self._reconfig else {}
@@ -230,16 +240,19 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Start adding a guard: pick the health source type (state vs template)."""
         return await self._source(user_input, reconfig=False)
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Start reconfiguring a guard: pick the health source type."""
         return await self._source(user_input, reconfig=True)
 
     async def _source(
         self, user_input: dict[str, Any] | None, *, reconfig: bool
     ) -> SubentryFlowResult:
+        """Show the source-type step, then advance to the device step."""
         self._reconfig = reconfig
         if user_input is not None:
             self._source_type = user_input[CONF_SOURCE_TYPE]
@@ -254,6 +267,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_device(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Collect name, health (what to watch) and the optional assigned device."""
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = _flatten_sections(user_input)
@@ -288,6 +302,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_strategy(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Pick the recovery strategy (or notify-only) and route to its form."""
         if user_input is not None:
             self._strategy = user_input[CONF_STRATEGY]
             return await {
@@ -311,12 +326,14 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
 
     @property
     def _check(self) -> bool:
+        """Return True if the chosen strategy verifies recovery (a check variant)."""
         return self._strategy in _CHECK_STRATEGIES
 
     # ---------- recovery strategy forms (one step per action shape) ----------
     async def async_step_switch(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Show the power-cycle-a-switch recovery form."""
         if user_input is not None:
             return await self._finish(
                 _build_data(self._step1, user_input, self._strategy)
@@ -337,6 +354,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_action(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Show the single-action-sequence recovery form."""
         errors: dict[str, str] = {}
         if user_input is not None:
             flat = _flatten_sections(user_input)
@@ -362,6 +380,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_actions(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Show the off/on action-pair recovery form."""
         errors: dict[str, str] = {}
         if user_input is not None:
             flat = _flatten_sections(user_input)
@@ -388,6 +407,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_poe_port(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Show the PoE-port recovery form (auto-resolve by expected id)."""
         if user_input is not None:
             return await self._finish(
                 _build_data(self._step1, user_input, STRATEGY_POE)
@@ -404,6 +424,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
     async def async_step_notify(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Show the notify-only form (observe, never recover)."""
         if user_input is not None:
             return await self._finish(_build_data(self._step1, user_input, MODE_NOTIFY))
         d = _behavior_defaults(self._reconfig_data()) if self._reconfig else None
@@ -434,6 +455,7 @@ class DeviceSubentryFlow(ConfigSubentryFlow):
                 )
 
     async def _finish(self, data: dict) -> SubentryFlowResult:
+        """Create the guard subentry, or update and abort on reconfigure."""
         if not self._reconfig:
             LOGGER.debug("Creating guard subentry for %s", data[CONF_NAME])
             return self.async_create_entry(title=data[CONF_NAME], data=data)
@@ -462,6 +484,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     """
 
     def __init__(self) -> None:
+        """Init the options flow (ports loaded lazily on first step)."""
         self._ports: list[dict] = []
         self._loaded = False
         self._edit_index = 0
@@ -471,6 +494,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Show the PoE port menu (add / edit / delete / import / export / save)."""
         if not self._loaded:
             self._loaded = True
             self._ports = list(self.config_entry.options.get(CONF_PORTS, []))
@@ -497,6 +521,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_add_port(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Show the port form; append a new port or replace the one being edited."""
         if user_input is not None:
             port = _flatten_sections(user_input)
             if self._editing and 0 <= self._edit_index < len(self._ports):
@@ -514,6 +539,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_edit_port(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Pick a port to edit, then open the port form pre-filled with it."""
         if user_input is not None:
             self._edit_index = int(user_input["port"])
             self._editing = True
@@ -525,6 +551,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_delete_port(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Pick a port to delete, drop it, and return to the menu."""
         if user_input is not None:
             index = int(user_input["port"])
             if 0 <= index < len(self._ports):
@@ -537,6 +564,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_import_ports(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Import ports from pasted YAML, merging into or replacing the list."""
         errors: dict[str, str] = {}
         value: object = None
         mode = IMPORT_MODE_MERGE
@@ -550,6 +578,7 @@ class NecromancerOptionsFlow(OptionsFlow):
                 errors["base"] = "import_failed"
                 detail = str(err)
             else:
+                LOGGER.debug("Importing %s PoE port(s) (%s)", len(imported), mode)
                 if mode == IMPORT_MODE_REPLACE:
                     self._ports = imported
                 else:
@@ -576,6 +605,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_export_ports(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Pick which ports to export, then render them as YAML."""
         if user_input is not None:
             chosen: list[dict] = []
             for raw in user_input.get(CONF_PORT_SELECTION, []):
@@ -591,6 +621,7 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_export_result(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Show the exported YAML as a copyable code block, then return to menu."""
         if user_input is not None:
             return await self.async_step_init()
         # Show the YAML as a markdown code block in the description (clean,
@@ -605,4 +636,6 @@ class NecromancerOptionsFlow(OptionsFlow):
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Write the working port list to the entry options."""
+        LOGGER.debug("Saving %s PoE port(s)", len(self._ports))
         return self.async_create_entry(data={CONF_PORTS: self._ports})

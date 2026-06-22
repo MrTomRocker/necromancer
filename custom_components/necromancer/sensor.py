@@ -22,6 +22,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the sensor platform from a config entry."""
     for subentry_id, engine in entry.runtime_data.engines.items():
         async_add_entities(
             [StatusSensor(engine, subentry_id)], config_subentry_id=subentry_id
@@ -48,14 +49,17 @@ class StatusSensor(NecromancerEntity, SensorEntity):
     _attr_options = [s.value for s in GState]
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
+        """Initialize the status sensor."""
         super().__init__(engine, subentry_id, "status")
 
     @property
     def native_value(self) -> str:
+        """Return the current lifecycle state."""
         return self._engine.state.value
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Return the status attributes."""
         e = self._engine
         return {
             "attempt": e.attempt,

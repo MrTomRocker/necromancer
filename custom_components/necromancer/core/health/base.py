@@ -9,10 +9,9 @@ layer on top later.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from enum import StrEnum
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
 
 class Health(StrEnum):
@@ -34,6 +33,7 @@ class HealthSource(ABC):
     """
 
     def __init__(self, hass: HomeAssistant, config: dict) -> None:
+        """Store hass and the source's config block."""
         self.hass = hass
         self.config = config
 
@@ -54,9 +54,7 @@ class HealthSource(ABC):
         """
         return list(self.watched_entities)
 
-    async def async_setup(
-        self, on_change: Callable[[], None]
-    ) -> Callable[[], None] | None:
+    async def async_setup(self, on_change: CALLBACK_TYPE) -> CALLBACK_TYPE | None:
         """Register own listeners (e.g. a template tracker). Returns an unsub."""
         return None
 

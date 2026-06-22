@@ -15,8 +15,12 @@ back (its staged verify).
 
 from __future__ import annotations
 
-from ...const import CONF_EXPECTED_ID, DOMAIN, LOGGER
+import logging
+
+from ...const import CONF_EXPECTED_ID, DOMAIN
 from .base import RecoveryDriver
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PoePortDriver(RecoveryDriver):
@@ -24,6 +28,7 @@ class PoePortDriver(RecoveryDriver):
 
     @property
     def expected_id(self) -> str:
+        """Return the guard's id (MAC, hostname, neighbour, or static label)."""
         return self.config[CONF_EXPECTED_ID]
 
     def _fabric(self):
@@ -31,6 +36,7 @@ class PoePortDriver(RecoveryDriver):
         return self.hass.data.get(DOMAIN, {}).get("fabric")
 
     async def can_recover(self) -> tuple[bool, str]:
+        """Refuse unless the id resolves to exactly one port via the fabric."""
         fabric = self._fabric()
         if fabric is None:
             return False, "PoE fabric not ready"
@@ -41,6 +47,7 @@ class PoePortDriver(RecoveryDriver):
         return True, ""
 
     async def recover(self) -> None:
+        """Hand off to the fabric to resolve, lock, and cycle the port."""
         fabric = self._fabric()
         if fabric is None:
             LOGGER.error("PoE %s: fabric not available", self.expected_id)
@@ -50,12 +57,14 @@ class PoePortDriver(RecoveryDriver):
         await fabric.repair(self.expected_id)
 
     def target_info(self) -> str:
+        """Return a short human description of the resolved port target."""
         fabric = self._fabric()
         if fabric is None:
             return f"id={self.expected_id}"
         return fabric.target_info(self.expected_id)
 
     def config_errors(self) -> list[str]:
+        """Return a config error when no PoE ports are configured."""
         fabric = self._fabric()
         if fabric is None or fabric.port_count == 0:
             return [

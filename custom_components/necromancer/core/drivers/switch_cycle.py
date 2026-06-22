@@ -8,9 +8,12 @@ this driver just does the power-cycle. The switch is always turned back on.
 from __future__ import annotations
 
 import asyncio
+import logging
 
-from ...const import CONF_OFF_ON_DELAY, CONF_SWITCH_ENTITY, DEFAULT_OFF_ON_DELAY, LOGGER
+from ...const import CONF_OFF_ON_DELAY, CONF_SWITCH_ENTITY, DEFAULT_OFF_ON_DELAY
 from .base import RecoveryDriver
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SwitchCycleDriver(RecoveryDriver):
@@ -18,15 +21,18 @@ class SwitchCycleDriver(RecoveryDriver):
 
     @property
     def switch_entity(self) -> str:
+        """Return the entity id of the switch to power-cycle."""
         return self.config[CONF_SWITCH_ENTITY]
 
     async def can_recover(self) -> tuple[bool, str]:
+        """Refuse if the switch entity is missing."""
         if self.hass.states.get(self.switch_entity) is None:
             LOGGER.error("Switch entity %s not found", self.switch_entity)
             return False, f"switch entity {self.switch_entity} not found"
         return True, ""
 
     async def recover(self) -> None:
+        """Cycle the switch off, wait `off_on_delay`, then on."""
         delay = int(self.config.get(CONF_OFF_ON_DELAY, DEFAULT_OFF_ON_DELAY))
         LOGGER.debug("Cycling %s: off", self.switch_entity)
         await self.hass.services.async_call(
@@ -42,9 +48,11 @@ class SwitchCycleDriver(RecoveryDriver):
         )
 
     def target_info(self) -> str:
+        """Return a short human description of the recovery target."""
         return self.switch_entity
 
     def config_errors(self) -> list[str]:
+        """Return a config error when the switch entity is missing."""
         if self.hass.states.get(self.switch_entity) is None:
             return [f"switch entity {self.switch_entity} not found"]
         return []
