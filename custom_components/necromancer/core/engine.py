@@ -47,7 +47,7 @@ from ..const import (
 from .drivers import RecoveryDriver
 from .health import Health, HealthSource
 from .links import LinkCoordinator
-from .notify import async_notify
+from .notify import async_notify, async_notify_custom
 from .policies import RecoveryPolicy
 from .state import GState
 
@@ -670,13 +670,16 @@ class DeviceEngine:
                     LOGGER.warning("%s recovery blocked: %s", self.name, reason)
                     self._escalate("recovery_blocked", reason=reason)
                     return
+                status_eid = er.async_get(self.hass).async_get_entity_id(
+                    "sensor", DOMAIN, f"{self._subentry_id}_status"
+                )
                 try:
                     await self.driver.recover(
                         {
                             "attempt": self.attempt,
                             "max": self.max_attempts,
                             "name": self.name,
-                            "guard_id": self._subentry_id,
+                            "guard_entity_id": status_eid,
                         }
                     )
                 except Exception as err:
@@ -854,4 +857,27 @@ class DeviceEngine:
         """Dispatch a lifecycle notification through the configured notify action."""
         await async_notify(
             self.hass, self.name, self.behavior.get(CONF_NOTIFY_ACTION), key, **params
+        )
+
+    async def async_notify_custom(
+        self,
+        message: str,
+        event: str = "custom",
+        event_text: str | None = None,
+        **params: object,
+    ) -> None:
+        """Push a caller-supplied message through this guard's notify action.
+
+        Backs the `necromancer.notify_guard` service so a recovery action can report
+        its own progress on the guard's configured channel, reusing the guard name.
+        Forwards the same variables a built-in alert exposes (see `async_notify_custom`).
+        """
+        await async_notify_custom(
+            self.hass,
+            self.name,
+            self.behavior.get(CONF_NOTIFY_ACTION),
+            message,
+            event,
+            event_text,
+            **params,
         )

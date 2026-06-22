@@ -2,7 +2,7 @@
 
 > Try the polite fix first — a graceful restart — and only reach for the sledgehammer (a force-kill or a full add-on restart) inside the *same* recovery attempt when the gentle path didn't take.
 
-**Concepts shown:** template guard · off/on actions & run an action · escalating recovery (`if/then`) · `wait_template` gating · `continue_on_timeout` / `continue_on_error` · health-check verify
+**Concepts shown:** template guard · off/on actions & run an action · escalating recovery (`if/then`) · `wait_template` gating · `continue_on_timeout` / `continue_on_error` · health-check verify · progress notify (`necromancer.notify_guard`)
 **Use it for:** Docker containers, add-ons, services — anything where a soft restart sometimes needs a hard one.
 
 ## The problem
@@ -132,6 +132,34 @@ finishes, the guard waits up to `boot_window` for *health* to read OK before dec
 success — and if it doesn't, that counts as one failed attempt, then a retry, then
 `escalated`. You get a two-stage fix *and* Necromancer's outer safety net, with no second
 guard and no race.
+
+## Report progress on the guard's own channel
+
+A two-stage recovery is exactly where a heads-up *between* the stages is useful — "the gentle
+restart didn't take, reaching for the hammer" — on the **same channel the guard already
+notifies on**, without hard-coding that channel into the script. `necromancer.notify_guard` runs
+the guard's configured notify action with your own text. Inside a recovery sequence, target the
+guard via the injected `{{ guard_entity_id }}` variable — drop it into the `if/then`, right before
+the forceful step:
+
+```yaml
+  then:
+    - action: necromancer.notify_guard
+      target:
+        entity_id: "{{ guard_entity_id }}"
+      data:
+        message: "Soft restart didn't take — force-killing the container"
+        event: "escalating"          # optional routing key for your notify action
+    - service: button.press
+      target:
+        entity_id: button.my_container_force_kill
+      continue_on_error: true
+```
+
+The notify action receives the same variables a built-in alert does (`message`, `name`,
+`event_text`, `event`, and — when you pass them — `attempt` / `max`), so your existing
+notification template renders it unchanged; unset variables arrive as empty strings. Route these
+progress notes away from your real alarms with the `event` key (a quiet channel vs a loud one).
 
 ## Adapt it to your setup
 

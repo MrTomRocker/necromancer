@@ -39,8 +39,8 @@ class RecoveryDriver(ABC):
         """Perform the recovery. Should return once the action is done.
 
         ``variables`` carries the engine's run context (``attempt``, ``max``,
-        ``name``, ``guard_id``) into action-running drivers; the switch / PoE /
-        no-op drivers ignore it.
+        ``name``, ``guard_entity_id``) into action-running drivers; the switch /
+        PoE / no-op drivers ignore it.
         """
 
     def target_info(self) -> str:

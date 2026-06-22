@@ -12,7 +12,18 @@ from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NecromancerConfigEntry
-from .const import ATTR_DURATION, SERVICE_RESET, SERVICE_SNOOZE, SERVICE_UNSNOOZE
+from .const import (
+    ATTR_ATTEMPT,
+    ATTR_DURATION,
+    ATTR_EVENT,
+    ATTR_EVENT_TEXT,
+    ATTR_MAX,
+    ATTR_MESSAGE,
+    SERVICE_NOTIFY_GUARD,
+    SERVICE_RESET,
+    SERVICE_SNOOZE,
+    SERVICE_UNSNOOZE,
+)
 from .core.engine import DeviceEngine, GState
 from .entity import NecromancerEntity
 
@@ -38,6 +49,17 @@ async def async_setup_entry(
         "async_snooze",
     )
     platform.async_register_entity_service(SERVICE_UNSNOOZE, None, "async_unsnooze")
+    platform.async_register_entity_service(
+        SERVICE_NOTIFY_GUARD,
+        {
+            vol.Required(ATTR_MESSAGE): cv.string,
+            vol.Optional(ATTR_EVENT, default="custom"): cv.string,
+            vol.Optional(ATTR_EVENT_TEXT): cv.string,
+            vol.Optional(ATTR_ATTEMPT): vol.Coerce(int),
+            vol.Optional(ATTR_MAX): vol.Coerce(int),
+        },
+        "async_notify_guard",
+    )
 
 
 class StatusSensor(NecromancerEntity, SensorEntity):
@@ -81,3 +103,17 @@ class StatusSensor(NecromancerEntity, SensorEntity):
     async def async_unsnooze(self) -> None:
         """necromancer.unsnooze — lift a snooze early."""
         self._engine.unsnooze()
+
+    async def async_notify_guard(
+        self,
+        message: str,
+        event: str,
+        event_text: str | None = None,
+        attempt: int | None = None,
+        max: int | None = None,
+    ) -> None:
+        """necromancer.notify_guard — send a custom message via the guard's notify action."""
+        params = {
+            k: v for k, v in (("attempt", attempt), ("max", max)) if v is not None
+        }
+        await self._engine.async_notify_custom(message, event, event_text, **params)

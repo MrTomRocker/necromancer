@@ -322,6 +322,56 @@ async def test_notify_resolve_tts_and_event_text(hass, _):
     assert efb == "Recovery succeeded.", efb
 
 
+async def test_notify_custom(hass, _):
+    """async_notify_custom passes the documented notify variables to the action."""
+    from custom_components.necromancer.core.notify import async_notify_custom
+
+    calls = async_mock_service(hass, "test", "notify_sink")
+    action = [
+        {
+            "action": "test.notify_sink",
+            "data": {
+                "message": "{{ message }}",
+                "name": "{{ name }}",
+                "event_text": "{{ event_text }}",
+                "event": "{{ event }}",
+                # no `| default` — the integration must supply "" so this never errors
+                "attempt": "{{ attempt }}",
+                "attempts": "{{ attempts }}",
+                "max": "{{ max }}",
+                "reason": "{{ reason }}",
+            },
+        }
+    ]
+    # minimal: unset optionals arrive as "" (no | default needed), event_text = message
+    await async_notify_custom(hass, "Markise", action, "Lege hart nach")
+    await hass.async_block_till_done()
+    d = calls[0].data
+    assert d["message"] == "Lege hart nach" and d["event_text"] == "Lege hart nach", d
+    assert d["name"] == "Markise" and d["event"] == "custom", d
+    assert d["attempt"] == "" and d["attempts"] == "" and d["max"] == "", d
+    assert d["reason"] == "", d
+    # explicit event_text + attempt + max -> attempts derived (plural-correct, en)
+    await async_notify_custom(
+        hass,
+        "Markise",
+        action,
+        "Härter",
+        event="retry",
+        event_text="nur Text",
+        attempt=2,
+        max=2,
+    )
+    await hass.async_block_till_done()
+    d2 = calls[1].data
+    assert d2["event_text"] == "nur Text" and d2["event"] == "retry", d2
+    assert d2["attempt"] == 2 and d2["max"] == 2 and d2["attempts"] == "2 attempts", d2
+    # no action configured -> silent no-op
+    await async_notify_custom(hass, "Markise", None, "x")
+    await hass.async_block_till_done()
+    assert len(calls) == 2, calls
+
+
 async def test_policy_reasons(hass, _):
     from custom_components.necromancer.const import REASON_AUTO_OFF, REASON_OBSERVE
     from custom_components.necromancer.core.policies.notify import NotifyPolicy
@@ -396,7 +446,7 @@ async def test_action_cycle_seeds_engine_vars(hass, _):
             "on_action": [{"action": "test.cycle_seed", "data": {"a": "{{ attempt }}"}}],
         },
     )
-    await drv.recover({"attempt": 2, "max": 3, "name": "X", "guard_id": "g1"})
+    await drv.recover({"attempt": 2, "max": 3, "name": "X", "guard_entity_id": "sensor.x"})
     await hass.async_block_till_done()
     assert [c.data["a"] for c in calls] == [2, 2], calls
 

@@ -470,6 +470,32 @@
       "name": "Schlummern beenden",
       "description": "Beendet das Schlummern eines Guards sofort, statt auf den Ablauf zu warten."
     },
+    "notify_guard": {
+      "name": "Über Guard benachrichtigen",
+      "description": "Sendet eine eigene Nachricht über die Notify-Aktion eines Guards — für Recovery-Skripte, die ihren eigenen Fortschritt über denselben Kanal melden wollen, den der Guard ohnehin nutzt.",
+      "fields": {
+        "message": {
+          "name": "Nachricht",
+          "description": "Der zu sendende Text. Steht der Notify-Aktion als Variablen message und event_text zur Verfügung; der Guard-Name ist der Titel."
+        },
+        "event": {
+          "name": "Event-Schlüssel",
+          "description": "Optionaler Routing-Schlüssel als Variable event (Standard: custom), damit deine Notify-Aktion darauf verzweigen kann."
+        },
+        "event_text": {
+          "name": "Event-Text",
+          "description": "Optionaler Text ohne Namen als event_text (Standard: die Nachricht) — für Titel/TTS, die den Namen separat setzen."
+        },
+        "attempt": {
+          "name": "Versuch",
+          "description": "Optionale Versuchszahl als attempt; leitet zugleich die pluralkorrekte Phrase attempts ab."
+        },
+        "max": {
+          "name": "Maximale Versuche",
+          "description": "Optionales Versuchslimit als max."
+        }
+      }
+    },
     "snooze_all": {
       "name": "Alle schlummern",
       "description": "Setzt alle Guards für eine Dauer aus — systemweiter Wartungsmodus. Jeder Guard ignoriert die Gesundheit und meldet nichts und wacht danach automatisch wieder auf. Guards mitten in einer Reparatur werden übersprungen (best-effort).",

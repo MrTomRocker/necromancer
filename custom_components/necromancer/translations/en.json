@@ -470,6 +470,32 @@
       "name": "Unsnooze",
       "description": "Resume a snoozed guard immediately instead of waiting for its snooze to elapse."
     },
+    "notify_guard": {
+      "name": "Notify via guard",
+      "description": "Send a custom message through a guard's own notify action — for recovery scripts that want to report their own progress on the same channel the guard already uses.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "The text to send. Exposed to the notify action as the message and event_text variables; the guard name is the title."
+        },
+        "event": {
+          "name": "Event key",
+          "description": "Optional routing key exposed as the event variable (default: custom), so your notify action can branch on it."
+        },
+        "event_text": {
+          "name": "Event text",
+          "description": "Optional name-less text exposed as event_text (defaults to the message) — for titles/TTS that set the name separately."
+        },
+        "attempt": {
+          "name": "Attempt",
+          "description": "Optional attempt count exposed as attempt; also derives the plural-correct attempts phrase."
+        },
+        "max": {
+          "name": "Max attempts",
+          "description": "Optional attempt limit exposed as max."
+        }
+      }
+    },
     "snooze_all": {
       "name": "Snooze all",
       "description": "Snooze every guard for a duration — system-wide maintenance mode. Each guard ignores health and raises no alerts, then auto-resumes. Guards mid-recovery are skipped (best-effort).",

@@ -204,8 +204,10 @@ something you'd rather fix by hand.
 
 **Variables in your actions.** The *Run an action* and *Off/on actions* strategies hand your action
 the guard's run context as Jinja variables — `attempt` and `max` (the current try and the limit),
-plus `name` and `guard_id` — so an action can branch on the attempt (a gentle fix first, a harder
-one on the second try). With **Off/on actions**, any variables you set in the off action (a
+plus `name` and `guard_entity_id` (the guard's own status sensor) — so an action can branch on the
+attempt (a gentle fix first, a harder one on the second try), or report its own progress on the
+guard's notify channel via `necromancer.notify_guard` (`target: {entity_id: "{{ guard_entity_id }}"}`).
+With **Off/on actions**, any variables you set in the off action (a
 `variables:` step) are also readable in the on action, so you can capture state before cutting power
 and restore it afterwards — no helper entity needed.
 
@@ -471,6 +473,9 @@ variables, so you decide whether and how to be notified:
 | `{{ event }}` | the event key (`recovery_attempt`, `recovery_success`, `recovery_failed`, `recovery_blocked`, `no_auto_recovery`, `problem_detected`, `linked_repair_failed`) |
 | `{{ attempt }}` / `{{ max }}` / `{{ attempts }}` | recovery attempt count, max, and the plural-correct phrase (e.g. *"3 attempts"*) — where applicable |
 
+Variables that don't apply to an event arrive as an **empty string** (never undefined), so a
+template can reference `{{ attempt }}` directly without a `| default` guard.
+
 Take the ready-made `message`, or compose your own from the parts (handy for **TTS** and to avoid
 repeating the name when you also set a title). The texts are phrased to read naturally aloud
 (*"Recovery attempt 1 of 2."*, not *"1/2"*):
@@ -515,6 +520,7 @@ device, or a whole area (bulk). Recovering *now* and arming auto-recovery stay t
 | `necromancer.reset` | Clear an **escalated** guard back to normal and re-check it — a manual "try again" once you've fixed the root cause (or just to acknowledge the alarm). Still unhealthy → it recovers again; already healthy → it just resumes watching, no needless repair. |
 | `necromancer.snooze` | Suspend a guard for a `duration` — it **ignores health and raises no alerts** (planned maintenance), shows `snoozed`, then **auto-resumes** when the time elapses (the remaining time survives a restart). Unlike turning auto-recovery *off* (which still detects and alarms), snooze goes fully quiet. Refused while a recovery is in flight. |
 | `necromancer.unsnooze` | Resume a snoozed guard immediately instead of waiting for the timer. |
+| `necromancer.notify_guard` | Send a **custom message through a guard's own notify action** — target a guard (its status sensor / device) and pass `message` (plus optional `event_text`, `event`, `attempt`, `max`). The notify action receives the **same variables a built-in alert does**, so your existing template works unchanged. For recovery scripts reporting their own progress on the channel the guard already uses; from a recovery action use `target: {entity_id: "{{ guard_entity_id }}"}`. |
 | `necromancer.snooze_all` | **Maintenance mode for everything** — snooze *every* guard for a `duration` (no target needed), then they all auto-resume. Guards mid-recovery are skipped (best-effort, logged). Handy as a one-tap dashboard button before a disruptive change. |
 | `necromancer.unsnooze_all` | Resume every snoozed guard at once. |
 | `necromancer.repair_poe_port` | Resolve a device `id` (MAC / IP / static label) to its PoE port and power-cycle it. It blocks until done and **coalesces per port** — concurrent callers join the one in-flight cycle instead of each cycling the port. This is the exact primitive Auto-PoE uses — call it from your own actions or automations when you want "reboot whatever is on this device's port". |
