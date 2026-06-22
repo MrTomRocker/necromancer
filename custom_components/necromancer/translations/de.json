@@ -174,7 +174,7 @@
         },
         "switch": {
           "title": "Schalter aus- und einschalten",
-          "description": "Schaltet bei einem Ausfall einen Schalter aus und wieder ein. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet wird, wie lange auf die Erholung des Geräts gewartet wird und wie oft erneut versucht wird.",
+          "description": "Schaltet bei einem Ausfall einen Schalter aus und wieder ein. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet und wie lange danach pausiert wird; mit Health-Check zusätzlich, wie lange auf die Erholung des Geräts gewartet und wie oft erneut versucht wird.",
           "data": {
             "switch_entity": "Schalter, der aus- und eingeschaltet wird (z. B. schaltbare Steckdose)",
             "off_on_delay": "Wartezeit zwischen Aus und Ein"
@@ -182,17 +182,17 @@
           "sections": {
             "behavior": {
               "name": "Verhalten",
-              "description": "Wann Necromancer reagiert und wie oft es wiederholt — die Standardwerte passen meist.",
+              "description": "Wann Necromancer reagiert und — mit Health-Check — wie oft es vor dem Aufgeben wiederholt. Die Standardwerte passen meist.",
               "data": {
                 "debounce": "Wartezeit vor Reaktion",
                 "boot_window": "Warten, bis das Gerät wieder gesund ist",
-                "cooldown": "Pause nach einem Versuch",
+                "cooldown": "Pause nach erfolgreicher Reparatur",
                 "max_attempts": "Max. Versuche"
               }
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "description": "Optional — eine Aktion ausführen, wenn dieser Guard ein Problem, eine Reparatur oder eine Eskalation meldet. Du gibst die Aktion vor (Handy-Push, TTS-Durchsage, eine Lampe, ein Skript — beliebig), und Necromancer übergibt den Meldetext als Variablen; du entscheidest, ob und wie benachrichtigt wird. Nimm die fertige `message` oder bau dir aus `name`, `event_text` (Text ohne Namen) und `event` deine eigene; `attempt`, `max`, `attempts` und `reason` stehen bereit, wo sie passen. Variablen referenzierst du in der Aktion mit doppelten geschweiften Klammern.",
               "data": {
                 "notify_action": "Aktion"
               }
@@ -217,24 +217,28 @@
         },
         "action": {
           "title": "Aktion ausführen",
-          "description": "Führt bei einem Ausfall deine Aktion aus. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet wird, wie lange auf die Erholung des Geräts gewartet wird und wie oft erneut versucht wird.",
-          "data": {
-            "action": "Aktion (z. B. Skript, Dienst, SSH, Webhook)"
-          },
+          "description": "Führt bei einem Ausfall deine Aktion aus. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet und wie lange danach pausiert wird; mit Health-Check zusätzlich, wie lange auf die Erholung des Geräts gewartet und wie oft erneut versucht wird.",
           "sections": {
+            "recovery_action": {
+              "name": "Wiederherstellungs-Aktion",
+              "description": "Was ausgeführt wird, um das Gerät zurückzuholen. Eine Aktion kann alles sein, was Home Assistant kann — ein Dienst-/Skript-Aufruf, ein SSH-/`shell_command`, ein `rest_command` oder Webhook, oder eine mehrstufige Sequenz mit Verzögerungen, Waits und Bedingungen. Sie läuft blockierend; mit Health-Check wartet Necromancer danach (bis zum Ablauf des Boot-Fensters), bis das Gerät wieder OK meldet.",
+              "data": {
+                "action": "Aktion (z. B. Skript, Dienst, SSH, Webhook)"
+              }
+            },
             "behavior": {
               "name": "Verhalten",
-              "description": "Wann Necromancer reagiert und wie oft es wiederholt — die Standardwerte passen meist.",
+              "description": "Wann Necromancer reagiert und — mit Health-Check — wie oft es vor dem Aufgeben wiederholt. Die Standardwerte passen meist.",
               "data": {
                 "debounce": "Wartezeit vor Reaktion",
                 "boot_window": "Warten, bis das Gerät wieder gesund ist",
-                "cooldown": "Pause nach einem Versuch",
+                "cooldown": "Pause nach erfolgreicher Reparatur",
                 "max_attempts": "Max. Versuche"
               }
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "description": "Optional — eine Aktion ausführen, wenn dieser Guard ein Problem, eine Reparatur oder eine Eskalation meldet. Du gibst die Aktion vor (Handy-Push, TTS-Durchsage, eine Lampe, ein Skript — beliebig), und Necromancer übergibt den Meldetext als Variablen; du entscheidest, ob und wie benachrichtigt wird. Nimm die fertige `message` oder bau dir aus `name`, `event_text` (Text ohne Namen) und `event` deine eigene; `attempt`, `max`, `attempts` und `reason` stehen bereit, wo sie passen. Variablen referenzierst du in der Aktion mit doppelten geschweiften Klammern.",
               "data": {
                 "notify_action": "Aktion"
               }
@@ -259,26 +263,30 @@
         },
         "actions": {
           "title": "Aktionen Aus/Ein",
-          "description": "Führt bei einem Ausfall die Aus-Aktion, wartet, dann die Ein-Aktion aus. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet wird, wie lange auf die Erholung des Geräts gewartet wird und wie oft erneut versucht wird.",
-          "data": {
-            "off_action": "Aus-Aktion (Strom kappen / Gerät ausschalten)",
-            "on_action": "Ein-Aktion (Strom wiederherstellen / Gerät einschalten)",
-            "off_on_delay": "Wartezeit zwischen Aus und Ein"
-          },
+          "description": "Führt bei einem Ausfall die Aus-Aktion, wartet, dann die Ein-Aktion aus. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet und wie lange danach pausiert wird; mit Health-Check zusätzlich, wie lange auf die Erholung des Geräts gewartet und wie oft erneut versucht wird.",
           "sections": {
+            "recovery_action": {
+              "name": "Wiederherstellungs-Aktionen",
+              "description": "Zwei Sequenzen mit einer Wartezeit dazwischen: die Off-Aktion (Strom kappen / ausschalten), dann die On-Aktion (wiederherstellen / einschalten). Jede kann eine beliebige Home-Assistant-Aktion sein — Dienst/Skript, SSH, `rest_command`, Webhook, Sequenz. Variablen, die du in der Off-Aktion setzt — plus `attempt` und `max` — sind in der On-Aktion lesbar, sodass du vor dem Abschalten einen Zustand erfassen und danach wiederherstellen kannst — ganz ohne Helfer-Entität.",
+              "data": {
+                "off_action": "Aus-Aktion (Strom kappen / Gerät ausschalten)",
+                "on_action": "Ein-Aktion (Strom wiederherstellen / Gerät einschalten)",
+                "off_on_delay": "Wartezeit zwischen Aus und Ein"
+              }
+            },
             "behavior": {
               "name": "Verhalten",
-              "description": "Wann Necromancer reagiert und wie oft es wiederholt — die Standardwerte passen meist.",
+              "description": "Wann Necromancer reagiert und — mit Health-Check — wie oft es vor dem Aufgeben wiederholt. Die Standardwerte passen meist.",
               "data": {
                 "debounce": "Wartezeit vor Reaktion",
                 "boot_window": "Warten, bis das Gerät wieder gesund ist",
-                "cooldown": "Pause nach einem Versuch",
+                "cooldown": "Pause nach erfolgreicher Reparatur",
                 "max_attempts": "Max. Versuche"
               }
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "description": "Optional — eine Aktion ausführen, wenn dieser Guard ein Problem, eine Reparatur oder eine Eskalation meldet. Du gibst die Aktion vor (Handy-Push, TTS-Durchsage, eine Lampe, ein Skript — beliebig), und Necromancer übergibt den Meldetext als Variablen; du entscheidest, ob und wie benachrichtigt wird. Nimm die fertige `message` oder bau dir aus `name`, `event_text` (Text ohne Namen) und `event` deine eigene; `attempt`, `max`, `attempts` und `reason` stehen bereit, wo sie passen. Variablen referenzierst du in der Aktion mit doppelten geschweiften Klammern.",
               "data": {
                 "notify_action": "Aktion"
               }
@@ -303,24 +311,24 @@
         },
         "poe_port": {
           "title": "Auto-PoE — passenden Port finden",
-          "description": "Findet anhand der Geräte-Kennung den passenden PoE-Port und schaltet ihn aus und wieder ein. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet wird, wie lange auf die Erholung des Geräts gewartet wird und wie oft erneut versucht wird. Die Ports verwaltest du über „Konfigurieren“ der Integration.",
+          "description": "Findet anhand der Geräte-Kennung den passenden PoE-Port und schaltet ihn aus und wieder ein. Die Zeiteinstellungen unten legen fest, wie lange vor dem Reagieren gewartet und wie lange danach pausiert wird; mit Health-Check zusätzlich, wie lange auf die Erholung des Geräts gewartet und wie oft erneut versucht wird. Die Ports verwaltest du über „Konfigurieren“ der Integration.",
           "data": {
             "expected_id": "Kennung des Geräts (z. B. MAC, IP oder Name)"
           },
           "sections": {
             "behavior": {
               "name": "Verhalten",
-              "description": "Wann Necromancer reagiert und wie oft es wiederholt — die Standardwerte passen meist.",
+              "description": "Wann Necromancer reagiert und — mit Health-Check — wie oft es vor dem Aufgeben wiederholt. Die Standardwerte passen meist.",
               "data": {
                 "debounce": "Wartezeit vor Reaktion",
                 "boot_window": "Warten, bis das Gerät wieder gesund ist",
-                "cooldown": "Pause nach einem Versuch",
+                "cooldown": "Pause nach erfolgreicher Reparatur",
                 "max_attempts": "Max. Versuche"
               }
             },
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "description": "Optional — eine Aktion ausführen, wenn dieser Guard ein Problem, eine Reparatur oder eine Eskalation meldet. Du gibst die Aktion vor (Handy-Push, TTS-Durchsage, eine Lampe, ein Skript — beliebig), und Necromancer übergibt den Meldetext als Variablen; du entscheidest, ob und wie benachrichtigt wird. Nimm die fertige `message` oder bau dir aus `name`, `event_text` (Text ohne Namen) und `event` deine eigene; `attempt`, `max`, `attempts` und `reason` stehen bereit, wo sie passen. Variablen referenzierst du in der Aktion mit doppelten geschweiften Klammern.",
               "data": {
                 "notify_action": "Aktion"
               }
@@ -352,7 +360,7 @@
           "sections": {
             "notification": {
               "name": "Benachrichtigung",
-              "description": "Optionale Aktion bei Problemen und Reparaturen. Verfügbare Jinja-Variablen (in doppelten geschweiften Klammern): message (die fertige Zeile 'Name: Text'), name, event_text (der Text ohne den Namen), event.",
+              "description": "Optional — eine Aktion ausführen, wenn dieser Guard ein Problem, eine Reparatur oder eine Eskalation meldet. Du gibst die Aktion vor (Handy-Push, TTS-Durchsage, eine Lampe, ein Skript — beliebig), und Necromancer übergibt den Meldetext als Variablen; du entscheidest, ob und wie benachrichtigt wird. Nimm die fertige `message` oder bau dir aus `name`, `event_text` (Text ohne Namen) und `event` deine eigene; `attempt`, `max`, `attempts` und `reason` stehen bereit, wo sie passen. Variablen referenzierst du in der Aktion mit doppelten geschweiften Klammern.",
               "data": {
                 "notify_action": "Aktion"
               }
@@ -461,6 +469,32 @@
     "unsnooze": {
       "name": "Schlummern beenden",
       "description": "Beendet das Schlummern eines Guards sofort, statt auf den Ablauf zu warten."
+    },
+    "notify_guard": {
+      "name": "Über Guard benachrichtigen",
+      "description": "Sendet eine eigene Nachricht über die Notify-Aktion eines Guards — für Recovery-Skripte, die ihren eigenen Fortschritt über denselben Kanal melden wollen, den der Guard ohnehin nutzt.",
+      "fields": {
+        "message": {
+          "name": "Nachricht",
+          "description": "Der zu sendende Text. Steht der Notify-Aktion als Variablen message und event_text zur Verfügung; der Guard-Name ist der Titel."
+        },
+        "event": {
+          "name": "Event-Schlüssel",
+          "description": "Optionaler Routing-Schlüssel als Variable event (Standard: custom), damit deine Notify-Aktion darauf verzweigen kann."
+        },
+        "event_text": {
+          "name": "Event-Text",
+          "description": "Optionaler Text ohne Namen als event_text (Standard: die Nachricht) — für Titel/TTS, die den Namen separat setzen."
+        },
+        "attempt": {
+          "name": "Versuch",
+          "description": "Optionale Versuchszahl als attempt; leitet zugleich die pluralkorrekte Phrase attempts ab."
+        },
+        "max": {
+          "name": "Maximale Versuche",
+          "description": "Optionales Versuchslimit als max."
+        }
+      }
     },
     "snooze_all": {
       "name": "Alle schlummern",

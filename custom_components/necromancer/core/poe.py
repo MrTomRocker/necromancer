@@ -12,9 +12,9 @@ status is fired as an event (``necromancer_poe_port``) so anything can react to 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+import logging
 
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import (
@@ -34,8 +34,9 @@ from ..const import (
     DEFAULT_PORT_OFF_TIMEOUT,
     DEFAULT_PORT_ON_TIMEOUT,
     DOMAIN,
-    LOGGER,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 PORT_GOOD = "good"
 PORT_RECOVERING = "recovering"
@@ -60,12 +61,13 @@ class PoeFabric:
     """Port-level resolve + repair, shared by guards and the repair service."""
 
     def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize empty port list, caches, status map and listener handle."""
         self.hass = hass
         self._ports: list[dict] = []
         self._cache: dict[str, str] = {}  # normalized id -> port label (last-known)
         self._status: dict[str, str] = {}  # port label -> status
         self._inflight: dict[str, asyncio.Task] = {}  # port label -> running cycle
-        self._unsub: Callable[[], None] | None = None
+        self._unsub: CALLBACK_TYPE | None = None
 
     # ---------- lifecycle ----------
     def set_ports(self, ports: list[dict], cache: dict[str, str] | None = None) -> None:
@@ -79,6 +81,7 @@ class PoeFabric:
         self._relearn()
 
     def shutdown(self) -> None:
+        """Cancel listeners and in-flight cycles on unload."""
         if self._unsub:
             self._unsub()
             self._unsub = None
@@ -89,6 +92,7 @@ class PoeFabric:
         return dict(self._cache)
 
     def _rewatch(self) -> None:
+        """Re-subscribe to every configured port's id-entity."""
         if self._unsub:
             self._unsub()
             self._unsub = None
@@ -104,6 +108,7 @@ class PoeFabric:
 
     @callback
     def _on_change(self, _event: Event) -> None:
+        """Re-learn the id->port cache when a watched id-entity changes."""
         self._relearn()
 
     def _learn(self, pid: str, label: str) -> None:
@@ -126,6 +131,7 @@ class PoeFabric:
 
     # ---------- resolution ----------
     def _port_id(self, port: dict) -> str | None:
+        """Read a port's current id (static, or from its id-entity)."""
         if static := port.get(CONF_ID_STATIC):
             return static
         entity_id = port.get(CONF_ID_ENTITY)
@@ -139,6 +145,7 @@ class PoeFabric:
         return None if value is None else str(value)
 
     def _by_label(self, label: str | None) -> dict | None:
+        """Find a configured port by its label."""
         if not label:
             return None
         return next((p for p in self._ports if p.get(CONF_LABEL) == label), None)
@@ -214,12 +221,15 @@ class PoeFabric:
 
     # ---------- status ----------
     def status(self, label: str) -> str:
+        """Return a port's current status (defaults to good)."""
         return self._status.get(label, PORT_GOOD)
 
     def all_status(self) -> dict[str, str]:
+        """Return a snapshot of every port's status by label."""
         return dict(self._status)
 
     def _set_status(self, label: str, status: str) -> None:
+        """Update a port's status and fire the change event only on transitions."""
         if self._status.get(label) != status:
             self._status[label] = status
             LOGGER.debug("PoE port %r -> %s", label, status)
@@ -257,6 +267,7 @@ class PoeFabric:
             self._inflight.pop(label, None)
 
     async def _run_cycle(self, port: dict) -> bool:
+        """Mark the port recovering, run one cycle, then set good/failed by result."""
         label = port[CONF_LABEL]
         self._set_status(label, PORT_RECOVERING)
         ok = await self._cycle(port)
@@ -266,6 +277,7 @@ class PoeFabric:
         return ok
 
     async def _cycle(self, port: dict) -> bool:
+        """Cut power, wait for offline, pause, restore power, wait for online."""
         actuator = port[CONF_ACTUATOR]
         label = port[CONF_LABEL]
         delay = int(port.get(CONF_OFF_ON_DELAY, DEFAULT_OFF_ON_DELAY))
@@ -294,6 +306,7 @@ class PoeFabric:
     async def _await_status(
         self, port: dict, expected: list | str, timeout: int, label_text: str
     ) -> bool:
+        """Wait until the port's status entity reaches an expected value or times out."""
         entity_id = port[CONF_STATUS_ENTITY]
         attribute = port.get(CONF_STATUS_ATTRIBUTE)
         targets = (

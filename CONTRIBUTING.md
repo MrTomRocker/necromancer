@@ -61,7 +61,7 @@ python -m py_compile custom_components/necromancer/*.py
 Additional house rules:
 
 - **Logging:** lazy `%`-formatting (never f-strings in log calls), no trailing period, no component name prefix (the logger name already carries it).
-- **Translations:** `strings.json` is the source; `translations/en.json` is an exact copy and `translations/de.json` mirrors its keys. Placeholder sets per key must stay consistent, every flow step needs a `description`, and descriptions must contain **no `{…}` braces** except real `description_placeholders` (HA renders config translations via ICU MessageFormat).
+- **Translations:** custom components ship **no `strings.json`** (a Core build-time file) — `translations/en.json` is the source, edited directly, and `translations/de.json` mirrors its keys. Placeholder sets per key must stay consistent, every flow step needs a `description`, and descriptions must contain **no `{…}` braces** except real `description_placeholders` (HA renders config translations via ICU MessageFormat).
 
 ## Testing
 

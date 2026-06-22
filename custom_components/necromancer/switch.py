@@ -23,6 +23,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the switch platform from a config entry."""
     for subentry_id, engine in entry.runtime_data.engines.items():
         if not engine.allows_recovery:
             continue  # notify-only guard has nothing to toggle
@@ -39,14 +40,18 @@ class AutoRestartSwitch(NecromancerEntity, SwitchEntity):
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
+        """Initialize the auto-restart switch."""
         super().__init__(engine, subentry_id, "auto_restart")
 
     @property
     def is_on(self) -> bool:
+        """Return whether auto-recovery is armed."""
         return self._engine.auto
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Arm auto-recovery."""
         self._engine.set_auto(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disarm auto-recovery."""
         self._engine.set_auto(False)

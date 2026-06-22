@@ -4,18 +4,25 @@ HealthSource -> Engine (RecoveryPolicy) -> RecoveryDriver.
 One config entry = the Necromancer service. Each **guarded device** is a config
 *subentry* (added via "Add device"). One DeviceEngine per subentry lives in
 entry.runtime_data.engines, keyed by subentry_id.
+
+HA lifecycle entry points:
+    async_setup_entry                 load an entry (boot / add / after reload)
+    async_unload_entry                tear it down (shutdown / before reload)
+    async_remove_config_entry_device  user deletes a guarded device in the UI
+Plus the registered reload hook (_async_reload_entry) on options/subentry change.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import logging
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     config_validation as cv,
@@ -38,7 +45,6 @@ from .const import (
     CONF_PORTS,
     CONF_TYPE,
     DOMAIN,
-    LOGGER,
     MODE_NOTIFY,
     PLATFORMS,
     SAVE_DELAY,
@@ -54,6 +60,8 @@ from .core.health import create_health
 from .core.links import link_components
 from .core.poe import PoeFabric
 from .core.policies import create_policy
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -74,12 +82,13 @@ class NecromancerData:
 type NecromancerConfigEntry = ConfigEntry[NecromancerData]
 
 
+# ---------- setup helpers ----------
 def _build_engine(
     hass: HomeAssistant,
     name: str,
     cfg: dict,
     persisted: dict | None,
-    save: Callable[[], None],
+    save: CALLBACK_TYPE,
     on_health_renamed: Callable[[str], None],
     subentry_id: str,
     linked_guards: list[str],
@@ -121,6 +130,7 @@ def _rename_handler(
     return _renamed
 
 
+# ---------- HA lifecycle: setup ----------
 async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) -> bool:
     """Set up the service: one engine per guarded-device subentry."""
     store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -233,7 +243,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
                 engines,
             )
             await engine.async_start()
-        except Exception:  # noqa: BLE001
+        except Exception:
             # One malformed guard must not take down the whole entry (all guards):
             # log which one and carry on with the rest.
             LOGGER.exception("Failed to set up guard %r — skipping", name)
@@ -277,6 +287,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
     return True
 
 
+# ---------- reconciliation helpers ----------
 def _reconcile_entities(
     hass: HomeAssistant,
     entry: NecromancerConfigEntry,
@@ -346,6 +357,7 @@ def _reconcile_devices(
         pending.discard(subentry_id)
 
 
+# ---------- HA lifecycle: reload / remove / unload ----------
 async def _async_reload_entry(
     hass: HomeAssistant, entry: NecromancerConfigEntry
 ) -> None:

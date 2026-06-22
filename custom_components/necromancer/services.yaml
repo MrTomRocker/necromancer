@@ -30,6 +30,38 @@ unsnooze:
       integration: necromancer
       domain: sensor
 
+notify_guard:
+  target:
+    entity:
+      integration: necromancer
+      domain: sensor
+  fields:
+    message:
+      required: true
+      example: "Sanfter Neustart fehlgeschlagen – lege hart nach"
+      selector:
+        text:
+    event:
+      example: "custom"
+      selector:
+        text:
+    event_text:
+      example: "Lege hart nach"
+      selector:
+        text:
+    attempt:
+      example: 2
+      selector:
+        number:
+          min: 0
+          mode: box
+    max:
+      example: 2
+      selector:
+        number:
+          min: 0
+          mode: box
+
 snooze_all:
   fields:
     duration:

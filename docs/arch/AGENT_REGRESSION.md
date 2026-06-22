@@ -685,19 +685,19 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 ### Jede Step-Beschreibung vorhanden
 
 - [ ] **DESC1 — Alle Subentry-Steps haben eine Beschreibung** · `P1`
-  - **Prüft:** user/reconfigure/device/strategy/switch/action/actions/poe_port/notify tragen je `description` (verifiziert in `strings.json` UND `translations/de.json`).
-  - **Files:** `strings.json` + `translations/de.json` → `config_subentries.device.step.<step>.description`.
+  - **Prüft:** user/reconfigure/device/strategy/switch/action/actions/poe_port/notify tragen je `description` (verifiziert in `translations/en.json` UND `translations/de.json`).
+  - **Files:** `translations/en.json` + `translations/de.json` → `config_subentries.device.step.<step>.description`.
   - **Treiber:** Aus `custom_components/necromancer`:
-    `python3 -c "import json;[print(f,[k for k in ['user','reconfigure','device','strategy','switch','action','actions','poe_port','notify'] if not json.load(open(f))['config_subentries']['device']['step'].get(k,{}).get('description')]) for f in ['strings.json','translations/de.json']]"`
-  - **Assert:** Für `strings.json` und `translations/de.json` jeweils leere Liste `[]`.
+    `python3 -c "import json;[print(f,[k for k in ['user','reconfigure','device','strategy','switch','action','actions','poe_port','notify'] if not json.load(open(f))['config_subentries']['device']['step'].get(k,{}).get('description')]) for f in ['translations/en.json','translations/de.json']]"`
+  - **Assert:** Für `translations/en.json` und `translations/de.json` jeweils leere Liste `[]`.
   - **Cleanup:** —
 
 - [ ] **DESC2 — Alle Options-Steps + add_port-Sektionen haben Beschreibungen** · `P1`
   - **Prüft:** init/add_port/edit_port/delete_port/import_ports/export_ports/export_result und die 4 Port-Sektionen tragen `description`.
-  - **Files:** `strings.json`/`translations/de.json` → `options.step.<step>.description` und `options.step.add_port.sections.{power,identity,status,timing}.description`.
+  - **Files:** `translations/en.json`/`translations/de.json` → `options.step.<step>.description` und `options.step.add_port.sections.{power,identity,status,timing}.description`.
   - **Treiber:**
-    `python3 -c "import json;s=json.load(open('strings.json'));o=s['options']['step'];print([k for k in ['init','add_port','edit_port','delete_port','import_ports','export_ports','export_result'] if not o.get(k,{}).get('description')],[k for k in ['power','identity','status','timing'] if not o['add_port']['sections'].get(k,{}).get('description')])"` — gleich für `translations/de.json`.
-  - **Assert:** Ausgabe `[] []` (für strings.json und de.json).
+    `python3 -c "import json;s=json.load(open('translations/en.json'));o=s['options']['step'];print([k for k in ['init','add_port','edit_port','delete_port','import_ports','export_ports','export_result'] if not o.get(k,{}).get('description')],[k for k in ['power','identity','status','timing'] if not o['add_port']['sections'].get(k,{}).get('description')])"` — gleich für `translations/de.json`.
+  - **Assert:** Ausgabe `[] []` (für translations/en.json und de.json).
   - **Cleanup:** —
 
 ### PoE: flache Portliste / Options-Flow
@@ -1060,10 +1060,10 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 ### P2 — Kosmetik / Infra
 
 - [ ] **KOS1 — Übersetzungen symmetrisch & jeder Step beschrieben** · `P2`
-  - **Prüft:** `strings.json`, `translations/en.json` und `translations/de.json` haben dieselben Schlüssel; alle Subentry-Steps (user/reconfigure/device/strategy/switch/action/actions/poe_port/notify) tragen eine `description`.
-  - **Files:** `strings.json`; `translations/{en,de}.json`.
-  - **Treiber:** `.venv/bin/python3 -m script.translations develop --integration necromancer` (aus `<ha-core>`); dann JSON-Keys von strings vs de vs en vergleichen; je Step `config_subentries.device.step.<id>.description` prüfen.
-  - **Assert:** Schlüsselmengen identisch (`strings==en==de`, verifiziert: alle drei gleich); alle 9 Device-Steps haben nicht-leere `description` (verifiziert: user/reconfigure/device/strategy/switch/action/actions/poe_port/notify).
+  - **Prüft:** `translations/en.json` und `translations/de.json` haben dieselben Schlüssel; alle Subentry-Steps (user/reconfigure/device/strategy/switch/action/actions/poe_port/notify) tragen eine `description`.
+  - **Files:** `translations/{en,de}.json` (Custom Components nutzen kein `strings.json`).
+  - **Treiber:** JSON-Keys von `translations/en.json` vs `translations/de.json` vergleichen; je Step `config_subentries.device.step.<id>.description` prüfen.
+  - **Assert:** Schlüsselmengen identisch (`en==de`, verifiziert: beide gleich); alle 9 Device-Steps haben nicht-leere `description` (verifiziert: user/reconfigure/device/strategy/switch/action/actions/poe_port/notify).
   - **Cleanup:** „—"
 
 - [ ] **KOS2 — Button heißt „Reparieren", Slug `_reparieren`** · `P2`

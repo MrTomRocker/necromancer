@@ -52,7 +52,7 @@ class StubDriver(RecoveryDriver):
     async def can_recover(self):
         return True, ""
 
-    async def recover(self):
+    async def recover(self, variables=None):
         self.calls += 1
         if self.raise_it:
             raise RuntimeError("boom")
@@ -159,7 +159,7 @@ async def test_manual_recover_ignored_while_busy(hass, _):
     gate = asyncio.Event()
 
     class BlockingDriver(StubDriver):
-        async def recover(self):
+        async def recover(self, variables=None):
             self.calls += 1
             await gate.wait()  # hold the cycle in flight
             health.verdict = Health.OK
@@ -352,7 +352,7 @@ async def test_leader_stop_does_not_escalate_follower(hass, _):
     gate = asyncio.Event()
 
     class BlockingDriver(StubDriver):
-        async def recover(self):
+        async def recover(self, variables=None):
             self.calls += 1
             await gate.wait()  # hold the leader's cycle in flight
 

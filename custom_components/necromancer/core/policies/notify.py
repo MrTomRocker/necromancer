@@ -16,4 +16,5 @@ class NotifyPolicy(RecoveryPolicy):
     allows_recovery = False
 
     def should_attempt(self, *, auto_enabled: bool) -> tuple[bool, str]:
+        """Always refuse: an observe-only guard never recovers."""
         return False, REASON_OBSERVE

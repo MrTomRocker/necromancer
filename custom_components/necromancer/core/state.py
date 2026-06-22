@@ -10,6 +10,8 @@ from enum import StrEnum
 
 
 class GState(StrEnum):
+    """The lifecycle state of a guard (the `sensor.<guard>_status` value)."""
+
     OK = "ok"
     SUSPECT = "suspect"
     RECOVERING = "recovering"

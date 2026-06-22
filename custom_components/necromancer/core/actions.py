@@ -33,13 +33,24 @@ async def async_run(
     action: list | dict | None,
     name: str,
     variables: dict[str, Any] | None = None,
-) -> None:
-    """Validate and run an action sequence, blocking until it finishes."""
+) -> dict[str, Any]:
+    """Validate and run an action sequence, blocking until it finishes.
+
+    Returns the script's final variable scope (including any set via a
+    `variables:` action), so a caller can chain one run's variables into the
+    next — e.g. `action_cycle` passing its off phase into its on phase. Empty
+    dict when there is nothing to run or the run produced no result.
+    """
     sequence = await async_validate(hass, action)
     if not sequence:
-        return
+        return {}
     script = Script(hass, sequence, name, DOMAIN)
-    await script.async_run(variables or {}, context=Context())
+    result = await script.async_run(variables or {}, context=Context())
+    if not result:
+        return {}
+    # `.variables` is the run's final scope; HA injects its run `context` there.
+    # Carry only real variables forward, not the (stale) Context object.
+    return {k: v for k, v in result.variables.items() if k != "context"}
 
 
 def static_errors(action: list | dict | None) -> list[str]:

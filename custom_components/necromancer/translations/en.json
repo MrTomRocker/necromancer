@@ -13,7 +13,7 @@
     "step": {
       "init": {
         "title": "PoE ports",
-        "description": "Add the PoE ports of your switches here. A monitored device using the \"Auto PoE\" strategy then finds its own port automatically and restarts it by briefly cutting power when it fails.\n\nConfigured ports:\n{ports}",
+        "description": "Add the PoE ports of your switches here. A monitored device using the \"Auto-PoE\" strategy then finds its own port automatically and restarts it by briefly cutting power when it fails.\n\nConfigured ports:\n{ports}",
         "menu_options": {
           "add_port": "Add port",
           "edit_port": "Edit port",
@@ -174,7 +174,7 @@
         },
         "switch": {
           "title": "Power-cycle a switch",
-          "description": "Powers a switch off and on when the device fails. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry.",
+          "description": "Powers a switch off and on when the device fails. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry.",
           "data": {
             "switch_entity": "Switch to power off and on (e.g. a smart plug)",
             "off_on_delay": "Wait between off and on"
@@ -182,17 +182,17 @@
           "sections": {
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts and how often it retries — the defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
                 "boot_window": "Wait until the device is healthy again",
-                "cooldown": "Pause after an attempt",
+                "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
@@ -217,24 +217,28 @@
         },
         "action": {
           "title": "Run an action",
-          "description": "Runs your action when the device fails. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry.",
-          "data": {
-            "action": "Action (e.g. a script, service, SSH, webhook)"
-          },
+          "description": "Runs your action when the device fails. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry.",
           "sections": {
+            "recovery_action": {
+              "name": "Recovery action",
+              "description": "What to run to bring the device back. An action can be anything Home Assistant can do — a service or script call, an SSH/`shell_command`, a `rest_command` or webhook, or a multi-step sequence with delays, waits and conditions. It runs blocking; with the health-check variant Necromancer then waits (up to the boot window) for the device to report OK again.",
+              "data": {
+                "action": "Action (e.g. a script, service, SSH, webhook)"
+              }
+            },
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts and how often it retries — the defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
                 "boot_window": "Wait until the device is healthy again",
-                "cooldown": "Pause after an attempt",
+                "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
@@ -259,26 +263,30 @@
         },
         "actions": {
           "title": "Off/on actions",
-          "description": "Runs the off action, waits, then the on action when the device fails. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry.",
-          "data": {
-            "off_action": "Off action (cut power / turn the device off)",
-            "on_action": "On action (restore power / turn the device on)",
-            "off_on_delay": "Wait between off and on"
-          },
+          "description": "Runs the off action, waits, then the on action when the device fails. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry.",
           "sections": {
+            "recovery_action": {
+              "name": "Recovery actions",
+              "description": "Two sequences with a wait between: the off action (cut power / turn off), then the on action (restore / turn on). Each can be any Home Assistant action — service or script, SSH, `rest_command`, webhook, sequence. Variables you set in the off action — plus `attempt` and `max` — are readable in the on action, so you can capture state before the cut and restore it afterwards, no helper entity needed.",
+              "data": {
+                "off_action": "Off action (cut power / turn the device off)",
+                "on_action": "On action (restore power / turn the device on)",
+                "off_on_delay": "Wait between off and on"
+              }
+            },
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts and how often it retries — the defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
                 "boot_window": "Wait until the device is healthy again",
-                "cooldown": "Pause after an attempt",
+                "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
@@ -302,25 +310,25 @@
           }
         },
         "poe_port": {
-          "title": "Auto PoE — find the port",
-          "description": "Finds the matching PoE port by the device's id and powers it off and on. The timing settings below set how long to wait before reacting, how long to wait for the device to recover, and how often to retry. Manage the ports under the integration's \"Configure\".",
+          "title": "Auto-PoE — find the port",
+          "description": "Finds the matching PoE port by the device's id and powers it off and on. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry. Manage the ports under the integration's \"Configure\".",
           "data": {
             "expected_id": "Device id (e.g. MAC, IP or name)"
           },
           "sections": {
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts and how often it retries — the defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
                 "boot_window": "Wait until the device is healthy again",
-                "cooldown": "Pause after an attempt",
+                "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
@@ -352,7 +360,7 @@
           "sections": {
             "notification": {
               "name": "Notification",
-              "description": "Optional action on problems and recoveries. Available Jinja variables (in double curly braces): message (the full line 'name: text'), name, event_text (the text without the name), event.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
@@ -423,7 +431,7 @@
         "action_check": "Run an action + health-check",
         "actions": "Off/on actions",
         "actions_check": "Off/on actions + health-check",
-        "poe_port": "Auto PoE (find the port automatically)"
+        "poe_port": "Auto-PoE (find the port automatically)"
       }
     },
     "import_mode": {
@@ -461,6 +469,32 @@
     "unsnooze": {
       "name": "Unsnooze",
       "description": "Resume a snoozed guard immediately instead of waiting for its snooze to elapse."
+    },
+    "notify_guard": {
+      "name": "Notify via guard",
+      "description": "Send a custom message through a guard's own notify action — for recovery scripts that want to report their own progress on the same channel the guard already uses.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "The text to send. Exposed to the notify action as the message and event_text variables; the guard name is the title."
+        },
+        "event": {
+          "name": "Event key",
+          "description": "Optional routing key exposed as the event variable (default: custom), so your notify action can branch on it."
+        },
+        "event_text": {
+          "name": "Event text",
+          "description": "Optional name-less text exposed as event_text (defaults to the message) — for titles/TTS that set the name separately."
+        },
+        "attempt": {
+          "name": "Attempt",
+          "description": "Optional attempt count exposed as attempt; also derives the plural-correct attempts phrase."
+        },
+        "max": {
+          "name": "Max attempts",
+          "description": "Optional attempt limit exposed as max."
+        }
+      }
     },
     "snooze_all": {
       "name": "Snooze all",

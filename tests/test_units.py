@@ -15,14 +15,14 @@ import sys
 
 import voluptuous as vol
 
-from tests.common import async_test_home_assistant
+from tests.common import async_mock_service, async_test_home_assistant
 
 from custom_components.necromancer.config_flow import (
     DeviceSubentryFlow,
     NecromancerOptionsFlow,
 )
 from custom_components.necromancer.config_flow_helpers import schemas as cf
-from custom_components.necromancer.core.actions import async_validate
+from custom_components.necromancer.core.actions import async_run, async_validate
 from custom_components.necromancer.core.drivers import create_driver
 from custom_components.necromancer.core.health import create_health
 from custom_components.necromancer.core.health.base import Health
@@ -322,6 +322,98 @@ async def test_notify_resolve_tts_and_event_text(hass, _):
     assert efb == "Recovery succeeded.", efb
 
 
+async def test_notify_custom(hass, _):
+    """async_notify_custom passes the documented notify variables to the action."""
+    from custom_components.necromancer.core.notify import async_notify_custom
+
+    calls = async_mock_service(hass, "test", "notify_sink")
+    action = [
+        {
+            "action": "test.notify_sink",
+            "data": {
+                "message": "{{ message }}",
+                "name": "{{ name }}",
+                "event_text": "{{ event_text }}",
+                "event": "{{ event }}",
+                # no `| default` — the integration must supply "" so this never errors
+                "attempt": "{{ attempt }}",
+                "attempts": "{{ attempts }}",
+                "max": "{{ max }}",
+                "reason": "{{ reason }}",
+            },
+        }
+    ]
+    # minimal: unset optionals arrive as "" (no | default needed), event_text = message
+    await async_notify_custom(hass, "Markise", action, "Lege hart nach")
+    await hass.async_block_till_done()
+    d = calls[0].data
+    assert d["message"] == "Lege hart nach" and d["event_text"] == "Lege hart nach", d
+    assert d["name"] == "Markise" and d["event"] == "custom", d
+    assert d["attempt"] == "" and d["attempts"] == "" and d["max"] == "", d
+    assert d["reason"] == "", d
+    # explicit event_text + attempt + max -> attempts derived (plural-correct, en)
+    await async_notify_custom(
+        hass,
+        "Markise",
+        action,
+        "Härter",
+        event="retry",
+        event_text="nur Text",
+        attempt=2,
+        max=2,
+    )
+    await hass.async_block_till_done()
+    d2 = calls[1].data
+    assert d2["event_text"] == "nur Text" and d2["event"] == "retry", d2
+    assert d2["attempt"] == 2 and d2["max"] == 2 and d2["attempts"] == "2 attempts", d2
+    # no action configured -> silent no-op
+    await async_notify_custom(hass, "Markise", None, "x")
+    await hass.async_block_till_done()
+    assert len(calls) == 2, calls
+
+
+async def test_notify_full_variable_set(hass, _):
+    """Every notify path always passes the exact same variable set (>= "" each).
+
+    Locks the contract that a notify action template can reference any documented
+    variable without a `| default` guard, across every lifecycle event and the
+    custom (notify_guard) path. Captures the variables dict handed to the action.
+    """
+    import custom_components.necromancer.core.notify as notify_mod
+    from custom_components.necromancer.const import NOTIFY_MESSAGES
+
+    full = {"message", "name", "event_text", "event", "attempt", "max", "attempts", "reason"}
+    captured: list[dict] = []
+
+    async def _cap(_hass, _action, _name, variables=None):
+        captured.append(dict(variables or {}))
+        return {}
+
+    orig = notify_mod.async_run
+    notify_mod.async_run = _cap
+    try:
+        action = [{"action": "test.sink"}]
+        # built-in path: every lifecycle event delivers exactly the full set
+        for key in NOTIFY_MESSAGES["en"]:
+            captured.clear()
+            await notify_mod.async_notify(hass, "G", action, key)
+            await hass.async_block_till_done()
+            assert captured and set(captured[0]) == full, (key, captured)
+        # custom path (notify_guard): same full set, unset optionals are ""
+        captured.clear()
+        await notify_mod.async_notify_custom(hass, "G", action, "hi")
+        await hass.async_block_till_done()
+        assert set(captured[0]) == full, captured[0]
+        assert captured[0]["reason"] == "" and captured[0]["attempt"] == "", captured[0]
+        # attempts is derived from attempt on the custom path too
+        captured.clear()
+        await notify_mod.async_notify_custom(hass, "G", action, "hi", attempt=3)
+        await hass.async_block_till_done()
+        assert captured[0]["attempts"] == "3 attempts", captured[0]
+    finally:
+        notify_mod.async_run = orig
+
+
 async def test_policy_reasons(hass, _):
     from custom_components.necromancer.const import REASON_AUTO_OFF, REASON_OBSERVE
     from custom_components.necromancer.core.policies.notify import NotifyPolicy
@@ -337,6 +429,83 @@ async def test_template_referenced_entities(hass, _):
     h = create_health(hass, {"type": "template",
                              "template": "{{ is_state('sensor.foo', 'on') }}"})
     assert "sensor.foo" in h.referenced_entities(), h.referenced_entities()
+
+
+# ---------------- core/drivers/action_cycle: off → on variable scope ----------------
+
+
+async def test_action_cycle_passes_off_vars_to_on(hass, _):
+    """A `variables:` set in the off action is readable in the on action."""
+    calls = async_mock_service(hass, "test", "cycle_vars")
+    drv = create_driver(
+        hass,
+        {
+            "type": "action_cycle",
+            "off_on_delay": 0,
+            "off_action": [{"variables": {"marker": "carried"}}],
+            "on_action": [{"action": "test.cycle_vars", "data": {"v": "{{ marker }}"}}],
+        },
+    )
+    await drv.recover()
+    await hass.async_block_till_done()
+    assert len(calls) == 1, calls
+    assert calls[0].data["v"] == "carried", calls[0].data
+
+
+async def test_action_cycle_no_vars_backward_compatible(hass, _):
+    """Without a `variables:` carry-over, both phases still run as before."""
+    calls = async_mock_service(hass, "test", "cycle_plain")
+    drv = create_driver(
+        hass,
+        {
+            "type": "action_cycle",
+            "off_on_delay": 0,
+            "off_action": [{"action": "test.cycle_plain", "data": {"phase": "off"}}],
+            "on_action": [{"action": "test.cycle_plain", "data": {"phase": "on"}}],
+        },
+    )
+    await drv.recover()
+    await hass.async_block_till_done()
+    assert [c.data["phase"] for c in calls] == ["off", "on"], calls
+
+
+async def test_async_run_returns_vars_without_context(hass, _):
+    """Returned scope carries real variables, not HA's injected run `context`."""
+    out = await async_run(hass, [{"variables": {"x": "1"}}], "ctxprobe")
+    assert out.get("x") == "1", out
+    assert "context" not in out, out
+
+
+async def test_action_cycle_seeds_engine_vars(hass, _):
+    """Engine vars passed to recover() are readable in both off and on phases."""
+    calls = async_mock_service(hass, "test", "cycle_seed")
+    drv = create_driver(
+        hass,
+        {
+            "type": "action_cycle",
+            "off_on_delay": 0,
+            "off_action": [{"action": "test.cycle_seed", "data": {"a": "{{ attempt }}"}}],
+            "on_action": [{"action": "test.cycle_seed", "data": {"a": "{{ attempt }}"}}],
+        },
+    )
+    await drv.recover({"attempt": 2, "max": 3, "name": "X", "guard_entity_id": "sensor.x"})
+    await hass.async_block_till_done()
+    assert [c.data["a"] for c in calls] == [2, 2], calls
+
+
+async def test_action_call_seeds_engine_vars(hass, _):
+    """Engine vars passed to recover() are readable in an action_call recovery."""
+    calls = async_mock_service(hass, "test", "call_seed")
+    drv = create_driver(
+        hass,
+        {
+            "type": "action_call",
+            "action": [{"action": "test.call_seed", "data": {"a": "{{ attempt }}"}}],
+        },
+    )
+    await drv.recover({"attempt": 5})
+    await hass.async_block_till_done()
+    assert calls[0].data["a"] == 5, calls[0].data
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

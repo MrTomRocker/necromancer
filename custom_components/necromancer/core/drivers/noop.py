@@ -13,8 +13,10 @@ from .base import RecoveryDriver
 class NoopDriver(RecoveryDriver):
     """Does nothing; used when the guard only notifies."""
 
-    async def recover(self) -> None:
+    async def recover(self, variables: dict | None = None) -> None:
+        """Do nothing (notify-only guard never recovers)."""
         return
 
     def target_info(self) -> str:
+        """Return a short human description of the recovery target."""
         return "—"

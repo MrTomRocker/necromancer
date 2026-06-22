@@ -16,6 +16,112 @@ switch, run an action, or auto-resolve a device to its PoE port and reboot it. I
 usual pile of bespoke *"ping → reload/restart"* automations with one configurable engine,
 vendor-agnostic, as an orchestrator on top of the entities you already have.
 
+---
+
+**Start here:** [Why Necromancer?](#why-necromancer) · [Installation](#installation) · [Getting started](#getting-started)
+**Understand it:** [How it works](#how-it-works) · [Health sources](#health-sources) · [Recovery strategies](#recovery-strategies) · [Timing & behaviour](#timing--behaviour) · [What you get](#what-you-get-per-guarded-device)
+**Go deeper:** [Linked guards](#linked-guards-groups) · [Supervisor guards](#supervisor-guards-watch-other-guards) · [PoE ports](#poe-ports) · [Notifications](#notifications) · [Services](#services)
+**Use & support:** [Cookbook](#cookbook) · [FAQ](#faq) · [Architecture](#architecture--internals) · [Contributing](#contributing) · [License](#license)
+
+---
+
+## Why Necromancer?
+
+Devices die quietly. A Hue bridge that needs a power-cycle, an access point that drops off the
+network, a camera that hangs — each one usually ends up with its own hand-written
+*"if unreachable for 5 minutes, toggle this switch and hope"* automation. They're brittle, they
+never verify the device actually came back, and PoE-restart tooling is vendor-locked
+(UniFi / Omada / Netgear) while generic SNMP tools are port-centric with no device logic.
+
+Necromancer is vendor-agnostic. It watches **any** health signal you already have and runs
+**any** recovery you can express — and for PoE it resolves a device to the **right port
+automatically** (by MAC, hostname or neighbour, even after you move the cable), cycles it, and
+**confirms the device is healthy again** before calling it done.
+
+> *Example:* a Hue bridge guarded by a ping sensor. It goes unreachable → Necromancer finds the
+> PoE port it's plugged into, cuts power, waits for the port and the bridge to come back, and
+> only then clears the alarm. One guard replaces the whole brittle automation.
+
+**What sets it apart:**
+
+- **It verifies — it doesn't hope.** A recovery counts as done only once health reads OK *again*;
+  an action that ran but didn't fix anything is a failed attempt, not a success. And ambiguous
+  health (missing entity, render error, `unknown`/`unavailable`) is treated as *unknown*, never a
+  fault — so nothing is ever power-cycled on a hunch.
+- **Vendor-neutral PoE that finds the port for you.** No UniFi/Omada/Netgear lock-in: point it at
+  any switch that reports its ports (or pin a static mapping) and it resolves device → port by
+  MAC/IP/name — and still recovers a device that has already dropped off the switch and aged out of
+  the neighbour table.
+- **One engine instead of a pile of automations.** Each device is a *guard* — health + recovery +
+  timing — clicked together in a wizard. No per-device scripts, no `if unreachable for 5 min` YAML.
+- **Guards cooperate.** Link guards that share a root cause so exactly one repairs and the rest
+  follow; or stage cheap fixes under a **supervisor guard** that escalates to a heavier one once the
+  small ones give up.
+- **Local and dependency-free.** No cloud, no extra Python packages, no polling devices it doesn't
+  own — it orchestrates the entities you already have, and its verdicts survive a restart.
+
+Under the hood it's three pluggable layers, each with a generic escape hatch so the common case
+needs no custom code:
+
+> **HealthSource** *(is it ok?)* → **Engine** *(lifecycle + timing)* → **RecoveryDriver** *(fix it)*
+
+## Installation
+
+### HACS (Home Assistant Community Store)
+
+Necromancer is **not in the HACS default store yet**, so add it as a custom repository.
+
+<details open>
+<summary>Add as a custom repository</summary>
+
+1. Open **HACS** in Home Assistant.
+2. Click the `⋮` menu in the top right and choose **Custom repositories**.
+3. Add the URL `https://github.com/MrTomRocker/homeassistant-necromancer` and set the category to **Integration**.
+4. Search for **Necromancer** in HACS and click **Download**.
+5. Restart Home Assistant.
+6. Add the integration via **Settings → Devices & Services**.
+
+</details>
+
+You can also use this shortcut once the repository is known to HACS:
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MrTomRocker&repository=homeassistant-necromancer&category=integration)
+
+<details>
+<summary>Manual installation</summary>
+
+1. Copy the `custom_components/necromancer` directory from this repository into your Home
+   Assistant `config/custom_components/` folder.
+2. Restart Home Assistant.
+
+</details>
+
+**Requires** Home Assistant **2025.7** or newer.
+
+## Getting started
+
+You add Necromancer **once** (no input), then add a *guarded device* for each thing you want
+watched.
+
+1. Go to **Settings → Devices & Services**, click **+ Add Integration** and search for
+   **Necromancer**. Confirm — it's added with no devices yet.
+2. On the Necromancer entry, click **Add device** to create a guard. The wizard walks you through:
+   **health source → device & check → what to do (notify-only or a recovery strategy) → its settings**.
+
+<div align="center">
+  <img width="480px" alt="Add a guarded device" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/add_device.png">
+</div>
+
+Along the way you set the **timing** (debounce / boot window / cooldown / max attempts — see
+[Timing & behaviour](#timing--behaviour)), an optional **notify action** (see
+[Notifications](#notifications)), an optional **restart-device-integration** toggle (when a device
+is assigned), and optionally link the guard to others. The defaults are sensible; tune them per
+device.
+
+That's a complete guard. For the **Auto-PoE** strategy you also configure your switch's ports
+once — see [PoE ports](#poe-ports). The rest of this README explains each piece in increasing
+depth, and [Cookbook](#cookbook) shows ready-made guard/strategy pairings.
+
 ## How it works
 
 Everything is built on one idea:
@@ -63,27 +169,76 @@ State that matters across a Home Assistant restart — the escalation verdict, a
 recovery stats and the per-guard auto-recovery switch — is **persisted** independently of the
 display entities.
 
-## Why Necromancer?
+## Health sources
 
-Devices die quietly. A Hue bridge that needs a power-cycle, an access point that drops off the
-network, a camera that hangs — each one usually ends up with its own hand-written
-*"if unreachable for 5 minutes, toggle this switch and hope"* automation. They're brittle, they
-never verify the device actually came back, and PoE-restart tooling is vendor-locked
-(UniFi / Omada / Netgear) while generic SNMP tools are port-centric with no device logic.
+How a guard decides whether a device is alive. Both are continuous, checkable expressions, so the
+verify step always works:
 
-Necromancer is vendor-agnostic. It watches **any** health signal you already have and runs
-**any** recovery you can express — and for PoE it resolves a device to the **right port
-automatically** (by MAC, hostname or neighbour, even after you move the cable), cycles it, and
-**confirms the device is healthy again** before calling it done.
+| Source | What it is | Healthy when |
+|---|---|---|
+| **State-based** | one entity's state or attribute, compared to on/off value lists | the value is in the *on* list (e.g. a ping / reachability sensor reads `on`) |
+| **Template-based** | an inline Jinja template returning `true`/`false` | the template renders truthy |
 
-> *Example:* a Hue bridge guarded by a ping sensor. It goes unreachable → Necromancer finds the
-> PoE port it's plugged into, cuts power, waits for the port and the bridge to come back, and
-> only then clears the alarm. One guard replaces the whole brittle automation.
+By default `unavailable`/`unknown` count as *unknown* (no false alarm). If "the entity is gone"
+*is* the failure you want to act on, list `unavailable` in the **off** values — then it triggers
+recovery like any other fault.
 
-Under the hood it's three pluggable layers, each with a generic escape hatch so the common case
-needs no custom code:
+Both the **on** and **off** sides accept a *list* of values, so several states can count as healthy
+(e.g. `home` **and** `on`) or as faulty — not just a single value.
 
-> **HealthSource** *(is it ok?)* → **Engine** *(lifecycle + timing)* → **RecoveryDriver** *(fix it)*
+## Recovery strategies
+
+Pick the shape that fits the device. The first three come **plain** (fire-and-forget) or **with a
+health-check** (wait until the device reports healthy again before declaring success):
+
+| Strategy | What it does |
+|---|---|
+| **Power-cycle a switch** | turn a switch off → wait → on (e.g. a smart plug) |
+| **Run an action** | one action sequence — script, service, SSH, webhook, … |
+| **Off/on actions** | an *off* action → wait → an *on* action |
+| **Auto-PoE** | resolve the device to its PoE port and power-cycle it, with a staged verify (the port goes offline → comes back) on top of the device health-check. It **remembers** the port while the device is healthy, so it can still recover a device that has already dropped off the switch and aged out of the neighbour table |
+
+A **notify-only** guard skips recovery entirely — it just detects the problem and raises the event
+(and optionally notifies). Pick **Notify only** at the top of the strategy step to be told about
+something you'd rather fix by hand.
+
+**Variables in your actions.** The *Run an action* and *Off/on actions* strategies hand your action
+the guard's run context as Jinja variables — `attempt` and `max` (the current try and the limit),
+plus `name` and `guard_entity_id` (the guard's own status sensor) — so an action can branch on the
+attempt (a gentle fix first, a harder one on the second try), or report its own progress on the
+guard's notify channel via `necromancer.notify_guard` (`target: {entity_id: "{{ guard_entity_id }}"}`).
+With **Off/on actions**, any variables you set in the off action (a
+`variables:` step) are also readable in the on action, so you can capture state before cutting power
+and restore it afterwards — no helper entity needed.
+
+**Restart device integration (optional).** When the guard has a device assigned, the recovery step
+shows a *Restart device integration* toggle: after the repair action — and before re-checking
+health — Necromancer reloads that device's integration (its config entry), after a delay you set.
+Handy when Home Assistant has to reconnect to a device that just came back (e.g. a bridge after a
+power-cycle), so you don't have to script a `homeassistant.reload_config_entry` action yourself.
+
+## Timing & behaviour
+
+Four knobs shape *when* a guard acts. The defaults are sensible; tune them per device. They live in
+the collapsed *Behaviour* section of the wizard.
+
+| Setting | Default | What it controls |
+|---|---|---|
+| **Debounce** | 120 s | How long a fault must persist before recovery starts. Absorbs short blips. |
+| **Boot window** | 180 s | How long to wait for the device to report healthy again after the recovery action, before counting the attempt as failed. Set it to the slowest your device takes to come back. |
+| **Cooldown** | 600 s | The pause after a *successful* recovery before the guard returns to `ok`. Prevents tight loops; if the device is still (or again) faulty when the cooldown elapses, the guard re-enters `suspect` (debounce) rather than looping straight back into recovery. |
+| **Max attempts** | 2 | How many times to retry before escalating. (Health-check strategies only — the `*_check` variants and Auto-PoE; fire-and-forget runs the action once.) |
+
+A few consequences worth knowing:
+
+- Retries are **back-to-back** — only the recovery action's own runtime separates them. The
+  "pause after an attempt" is the cooldown, which happens *after success*, not between retries.
+- **Escalation** (`escalated`) is the dead end: the guard has given up (or recovery was blocked, or
+  auto-recovery is off). It clears itself back to `ok` automatically the moment health returns.
+- **Auto-recovery off** (the per-guard switch) means *off*: the guard still detects and escalates,
+  but never touches anything — not its own recovery, and not following a linked partner (see below).
+- The **manual recover button** forces a cycle right now, bypassing both the debounce and the
+  auto-recovery switch.
 
 ## What you get per guarded device
 
@@ -124,12 +279,13 @@ Attributes: `attempt` (retries in the current cycle), `recover_count` (lifetime 
 
 ### Recovery events — `event.<guard>_recovery`
 
-Fires once per recovery outcome (with `attempt` / `reason` in the event data):
+Fires once per recovery outcome. The event data depends on the type — `recovered` carries
+`via_link` / `recover_count`, while `escalated` and `blocked` carry `attempt` / `reason`:
 
 | Event type | When |
 |---|---|
 | `recovered` | A recovery cycle brought the device back. |
-| `escalated` | Tried `max_attempts` times and it didn't come back — a **device** problem. |
+| `escalated` | Ran out of attempts **or the recovery action errored** — the device didn't come back. A **device** problem. |
 | `blocked` | Couldn't even *attempt* — the recovery target is missing/unresolvable (switch gone, no PoE-port match, no action). A **config/wiring** problem. |
 
 `escalated` and `blocked` both leave the guard in the `escalated` **state**, so the event
@@ -147,64 +303,30 @@ vs "the device is dead").
 - `button.<guard>_revive` — force a recovery cycle right now, bypassing the debounce and
   the auto-off gate.
 
-## Health sources
+### On your dashboard & in automations
 
-How a guard decides whether a device is alive. Both are continuous, checkable expressions, so the
-verify step always works:
+The five entities are plain Home Assistant entities — no custom card needed:
 
-| Source | What it is | Healthy when |
-|---|---|---|
-| **State-based** | one entity's state or attribute, compared to on/off value lists | the value is in the *on* list (e.g. a ping / reachability sensor reads `on`) |
-| **Template-based** | an inline Jinja template returning `true`/`false` | the template renders truthy |
+- **Overview:** an `entities` (or `auto-entities`) card over every `sensor.*_status`. It's a proper
+  enum sensor, so each state shows its localized label.
+- **Per guard:** a tile with the status sensor plus the `revive` button and `auto_recovery` switch.
+- **History:** drop `event.<guard>_recovery` into a logbook card to see `recovered` / `escalated` /
+  `blocked` over time.
 
-By default `unavailable`/`unknown` count as *unknown* (no false alarm). If "the entity is gone"
-*is* the failure you want to act on, list `unavailable` in the **off** values — then it triggers
-recovery like any other fault.
+Automate on the recovery event — e.g. alert only when a guard actually gives up:
 
-## Recovery strategies
-
-Pick the shape that fits the device. The first three come **plain** (fire-and-forget) or **with a
-health-check** (wait until the device reports healthy again before declaring success):
-
-| Strategy | What it does |
-|---|---|
-| **Power-cycle a switch** | turn a switch off → wait → on (e.g. a smart plug) |
-| **Run an action** | one action sequence — script, service, SSH, webhook, … |
-| **Off/on actions** | an *off* action → wait → an *on* action |
-| **Auto-PoE** | resolve the device to its PoE port and power-cycle it, with a staged verify (the port goes offline → comes back) on top of the device health-check. It **remembers** the port while the device is healthy, so it can still recover a device that has already dropped off the switch and aged out of the neighbour table |
-
-A **notify-only** guard skips recovery entirely — it just detects the problem and raises the event
-(and optionally notifies). Pick **Notify only** at the top of the strategy step to be told about
-something you'd rather fix by hand.
-
-**Restart device integration (optional).** When the guard has a device assigned, the recovery step
-shows a *Restart device integration* toggle: after the repair action — and before re-checking
-health — Necromancer reloads that device's integration (its config entry), after a delay you set.
-Handy when Home Assistant has to reconnect to a device that just came back (e.g. a bridge after a
-power-cycle), so you don't have to script a `homeassistant.reload_config_entry` action yourself.
-
-## Timing & behaviour
-
-Four knobs shape *when* a guard acts. The defaults are sensible; tune them per device. They live in
-the collapsed *Behaviour* section of the wizard.
-
-| Setting | Default | What it controls |
-|---|---|---|
-| **Debounce** | 120 s | How long a fault must persist before recovery starts. Absorbs short blips. |
-| **Boot window** | 180 s | How long to wait for the device to report healthy again after the recovery action, before counting the attempt as failed. Set it to the slowest your device takes to come back. |
-| **Cooldown** | 600 s | The pause after a *successful* recovery before the guard returns to `ok`. Prevents tight loops; a fresh fault during cooldown re-enters the cycle immediately. |
-| **Max attempts** | 2 | How many times to retry before escalating. (`*_check` strategies only — fire-and-forget runs once.) |
-
-A few consequences worth knowing:
-
-- Retries are **back-to-back** — only the recovery action's own runtime separates them. The
-  "pause after an attempt" is the cooldown, which happens *after success*, not between retries.
-- **Escalation** (`escalated`) is the dead end: the guard has given up (or recovery was blocked, or
-  auto-recovery is off). It clears itself back to `ok` automatically the moment health returns.
-- **Auto-recovery off** (the per-guard switch) means *off*: the guard still detects and escalates,
-  but never touches anything — not its own recovery, and not following a linked partner (see below).
-- The **manual recover button** forces a cycle right now, bypassing both the debounce and the
-  auto-recovery switch.
+```yaml
+- triggers:
+    - trigger: state
+      entity_id: event.hue_bridge_recovery
+  conditions:
+    - condition: template
+      value_template: "{{ trigger.to_state.attributes.event_type in ['escalated', 'blocked'] }}"
+  actions:
+    - action: notify.mobile_app_phone
+      data:
+        message: "Necromancer gave up on {{ trigger.to_state.name }}"
+```
 
 ## Linked guards (groups)
 
@@ -231,13 +353,13 @@ alone they'd both power-cycle the same port. Link them into a **group** instead 
 Linking is **mutual and transitive**: link A to B, and if B already links to C the whole
 `{A, B, C}` becomes one group, shown in full on the next edit. To leave a group, clear *all* of its
 partners (a single remaining link re-forms the group). Every repair is also published as a
-`necromancer_guard_repair` event (`{guard, name, phase: start|done, success}`), so your own
-automations can react to it.
+`necromancer_guard_repair` bus event — `{guard, name, phase}` (`start` / `done`), plus a `success`
+flag on the `done` event — so your own automations can react to it.
 
 ## Supervisor guards (watch other guards)
 
 A guard's **template** health can reference **other guards'** own entities — their
-`sensor.<name>_status` (`ok` / `suspect` / `recovering` / `verify` / `cooldown` / `escalated`) or
+`sensor.<name>_status` (`ok` / `suspect` / `recovering` / `verify` / `cooldown` / `escalated` / `snoozed`) or
 `binary_sensor.<name>_health`. That lets you **stage** recovery: small per-device guards try the
 cheap fix first; a higher-level **supervisor guard** watches their status and triggers a bigger
 recovery once several have given up.
@@ -253,153 +375,16 @@ give it a longer **debounce** so the sub-guards finish their own attempts first.
 offers other guards' entities; only the guard's **own** entities are excluded (a self-reference
 would loop — that case is warned about).
 
-## Services
+## PoE ports
 
-Per-guard actions are exposed as services — target a guard's `sensor.<guard>_status`, its
-device, or a whole area (bulk). Recovering *now* and arming auto-recovery stay the per-guard
-**button** (`button.<guard>_revive`) and **switch** (`switch.<guard>_auto_recovery`) above.
+The **Auto-PoE** strategy (and the `necromancer.repair_poe_port` service) need to know your
+switch's ports. They're managed as a flat list under Necromancer's **Configure** (options). Each
+port carries a status entity (is the port up?), the actuator switch that powers it, its own timing —
+and an **id** that lets a guard find *which* port belongs to its device.
 
-| Service | What it does |
-|---|---|
-| `necromancer.reset` | Clear an **escalated** guard back to normal and re-check it — a manual "try again" once you've fixed the root cause (or just to acknowledge the alarm). Still unhealthy → it recovers again; already healthy → it just resumes watching, no needless repair. |
-| `necromancer.snooze` | Suspend a guard for a `duration` — it **ignores health and raises no alerts** (planned maintenance), shows `snoozed`, then **auto-resumes** when the time elapses (the remaining time survives a restart). Unlike turning auto-recovery *off* (which still detects and alarms), snooze goes fully quiet. Refused while a recovery is in flight. |
-| `necromancer.unsnooze` | Resume a snoozed guard immediately instead of waiting for the timer. |
-| `necromancer.snooze_all` | **Maintenance mode for everything** — snooze *every* guard for a `duration` (no target needed), then they all auto-resume. Guards mid-recovery are skipped (best-effort, logged). Handy as a one-tap dashboard button before a disruptive change. |
-| `necromancer.unsnooze_all` | Resume every snoozed guard at once. |
-| `necromancer.repair_poe_port` | Resolve a device `id` (MAC / IP / static label) to its PoE port and power-cycle it. It blocks until done and **coalesces per port** — concurrent callers join the one in-flight cycle instead of each cycling the port. This is the exact primitive Auto-PoE uses — call it from your own actions or automations when you want "reboot whatever is on this device's port". |
-
-## Recipes
-
-Each row is **one guard** — a health source paired with a strategy:
-
-| Goal | Health source | Strategy |
-|---|---|---|
-| Reboot a hung **gateway / hub** (Hue bridge, Zigbee/Z-Wave coordinator) on a smart plug | ping / reachability sensor | **Power-cycle a switch** *(with health-check)* |
-| Power-cycle a device behind a **Shelly** (or any smart plug) | ping / reachability sensor | **Power-cycle a switch** — the Shelly's `switch.*` entity |
-| Reboot a **PoE device** (access point, camera, IP phone) and find its port automatically | ping / reachability sensor | **Auto-PoE** |
-| **Escalate when sub-guards give up** — e.g. hard-reboot a bridge once two of its guards are `escalated` | *template* over other guards' `sensor.*_status` (supervisor guard) | **Auto-PoE** / power-cycle |
-| Recover a **PoE bridge with belt-and-braces detection** | *two linked guards* — a ping sensor **and** a "lamps unavailable" template | **Run an action** → `repair_poe_port` + reload, linked so only one cycles |
-| Redeploy a **stuck Node-RED flow** | template watching a heartbeat that stopped updating | **Run an action** → Node-RED restart/redeploy endpoint |
-| Repair an **automation stuck in the wrong state** | template comparing its state to the expected one | **Off/on actions** → restart that automation |
-
-**Stuck Node-RED flow.** Make the health a template that watches a flow's heartbeat entity, and the
-recovery a REST command that redeploys it:
-
-- *Health (template-based):* `{{ (now() - states.sensor.nodered_heartbeat.last_changed).total_seconds() < 600 }}`
-  — unhealthy once the heartbeat is older than 10 minutes.
-- *Recovery (Run an action):* a `rest_command` (or webhook) that hits the Node-RED admin API to
-  restart the flow. Add the health-check variant so Necromancer waits for the heartbeat to resume
-  before declaring success.
-
-**Automation stuck in the wrong state.** Detect the inconsistency with a template, then restart the
-automation:
-
-- *Health (template-based):* `{{ is_state('automation.nightly_backup', 'on') }}` — or any expression
-  comparing the automation to the state it *should* be in.
-- *Recovery (Off/on actions):* `automation.turn_off` then `automation.turn_on` — a clean reload of
-  just that automation.
-
-## FAQ
-
-**Why didn't my guard react when the device went offline?**
-Either the health source read *unknown* rather than *faulty* (commonly: the entity went
-`unavailable` and you didn't list `unavailable` as an off-value), or the outage was shorter than the
-debounce window. Necromancer acts only on a confirmed, sustained fault.
-
-**Why is the status still `recovering`/`verify` long after the action ran?**
-With a health-check, the guard waits up to the boot window for the device to report healthy again.
-A device that boots slowly (a bridge can take minutes before its API and entities return) keeps the
-guard in `verify` until it's genuinely back — that's the "no false success" guarantee at work.
-Raise the boot window if your device needs longer.
-
-**Why did it stop after two tries and go `escalated`?**
-That's max attempts. The guard alerts you (if you set a notify action) rather than power-cycling
-forever. It clears back to `ok` on its own once health returns.
-
-**Why are both my linked guards showing `recovering` when only one is doing anything?**
-By design. Linked guards share a root cause, so when one repairs the others hold and re-verify
-afterwards, instead of running the same recovery in parallel.
-
-**I turned off a guard's auto-recovery — why is it `escalated`?**
-"Auto-recovery off" means the guard still watches and *alerts*, but won't act. A sustained fault
-therefore goes straight to `escalated` (your alarm) rather than being fixed silently — including
-when a linked partner is repairing the shared cause.
-
-**Auto-PoE says it can't find the port.** Exactly one port must match the guard's device id. Zero
-matches (the device is gone *and* there's no learned/last-known port) or several matches both block
-recovery on purpose — nothing random gets power-cycled. Check that one port reports that MAC/IP, or
-pin it with a fixed id (see *Identifying the right port* below).
-
-**Disabling the device's entities to test it doesn't trigger anything.** A *disabled* entity reads
-`unknown`, not `unavailable`, so a template checking `unavailable` won't fire. Simulate a real
-outage instead (cut power, unplug), or override the state — don't disable the entity.
-
-**Where's the option to link guards?** The *Linked guards* section only appears once there's
-another recover guard to link to — so your very first guard has nothing to offer there. Add the
-second guard, then link them from either guard's **Reconfigure**.
-
-**When should I pick a "with health-check" strategy?** Whenever the recovery can fail *silently* —
-for example Auto-PoE/`repair_poe_port` with an id that might not resolve, or an action whose effect
-you can't otherwise confirm. The health-check variants only declare success once the device reports
-healthy again; the plain (fire-and-forget) variants assume the action worked and rely on continuous
-monitoring to re-trigger if it didn't, which can mean one premature "recovered" notification.
-
-## Installation
-
-### HACS (Home Assistant Community Store)
-
-Necromancer is **not in the HACS default store yet**, so add it as a custom repository.
-
-<details open>
-<summary>Add as a custom repository</summary>
-
-1. Open **HACS** in Home Assistant.
-2. Click the `⋮` menu in the top right and choose **Custom repositories**.
-3. Add the URL `https://github.com/MrTomRocker/homeassistant-necromancer` and set the category to **Integration**.
-4. Search for **Necromancer** in HACS and click **Download**.
-5. Restart Home Assistant.
-6. Add the integration via **Settings → Devices & Services**.
-
-</details>
-
-You can also use this shortcut once the repository is known to HACS:
-
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MrTomRocker&repository=homeassistant-necromancer&category=integration)
-
-<details>
-<summary>Manual installation</summary>
-
-1. Copy the `custom_components/necromancer` directory from this repository into your Home
-   Assistant `config/custom_components/` folder.
-2. Restart Home Assistant.
-
-</details>
-
-**Requires** Home Assistant **2025.6** or newer.
-
-## Configuration
-
-You add Necromancer **once** (no input), then add a *guarded device* for each thing you want
-watched.
-
-1. Go to **Settings → Devices & Services**, click **+ Add Integration** and search for
-   **Necromancer**. Confirm — it's added with no devices yet.
-2. On the Necromancer entry, click **Add device** to create a guard. The wizard walks you through:
-   **health source → device & check → what to do (notify-only or a recovery strategy) → its settings**.
-
-<div align="center">
-  <img width="480px" alt="Add a guarded device" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/add_device.png">
-</div>
-
-Along the way you set the **timing** (debounce / boot window / cooldown / max attempts — see
-[Timing & behaviour](#timing--behaviour)), an optional **notify action**, an optional
-**restart-device-integration** toggle (when a device is assigned), and optionally link the
-guard to others. The defaults are sensible; tune them per device.
-
-**PoE ports** (only needed for the Auto-PoE strategy) are managed as a flat list under Necromancer's
-**Configure** (options). Each port carries a status entity (is the port up?), the actuator switch
-that powers it, its own timing — and an **id** that lets a guard find *which* port belongs to its
-device.
+Every port also fires a `necromancer_poe_port` bus event on each status change — `{port, status}`
+with status `good` / `recovering` / `failed` — handy to drive a per-port indicator or to alert when
+a cycle fails.
 
 ### Identifying the right port — fixed vs. dynamic
 
@@ -443,7 +428,7 @@ Necromancer drops the stale entry and refuses rather than power-cycling the wron
 > must match: zero or several blocks recovery (it's logged and the guard goes to `escalated`), so
 > nothing random ever gets power-cycled.
 
-#### Import / export the port list (YAML)
+### Import / export the port list (YAML)
 
 Clicking through the per-port form gets old fast once you have a switch full of ports. Under
 Necromancer's **Configure** you can also **Export** and **Import** the whole list as YAML:
@@ -474,7 +459,7 @@ digit-and-colon ids — as in `'on'` or `'00:11:22'`. Export already quotes thos
 export → edit → import round-trip is always safe; on error the import is rejected with the reason and
 nothing changes.
 
-### Notifications
+## Notifications
 
 Each guard can optionally run a **notify action** on problem / recovery / escalation. There are no
 fixed targets — you provide an action and Necromancer hands it the resolved, localized text as
@@ -487,6 +472,10 @@ variables, so you decide whether and how to be notified:
 | `{{ event_text }}` | just the event text, **without** the name (e.g. *"Recovery succeeded."*) |
 | `{{ event }}` | the event key (`recovery_attempt`, `recovery_success`, `recovery_failed`, `recovery_blocked`, `no_auto_recovery`, `problem_detected`, `linked_repair_failed`) |
 | `{{ attempt }}` / `{{ max }}` / `{{ attempts }}` | recovery attempt count, max, and the plural-correct phrase (e.g. *"3 attempts"*) — where applicable |
+| `{{ reason }}` | why recovery was **blocked** or **failed** (e.g. a missing PoE port) — set for `recovery_blocked` / `recovery_failed`, empty otherwise |
+
+Variables that don't apply to an event arrive as an **empty string** (never undefined), so a
+template can reference `{{ attempt }}` directly without a `| default` guard.
 
 Take the ready-made `message`, or compose your own from the parts (handy for **TTS** and to avoid
 repeating the name when you also set a title). The texts are phrased to read naturally aloud
@@ -511,6 +500,97 @@ repeating the name when you also set a title). The texts are phrased to read nat
 ```
 
 The action runs **detached**, so a deliberate delay in your notify flow never stalls the engine.
+
+## Services
+
+Per-guard actions are exposed as services — target a guard's `sensor.<guard>_status`, its
+device, or a whole area (bulk). Recovering *now* and arming auto-recovery stay the per-guard
+**button** (`button.<guard>_revive`) and **switch** (`switch.<guard>_auto_recovery`) above.
+
+```yaml
+# Snooze one guard for 30 minutes (a device or area target expands to its status sensor):
+- action: necromancer.snooze
+  target:
+    entity_id: sensor.hue_bridge_status
+  data:
+    duration: "00:30:00"
+```
+
+| Service | What it does |
+|---|---|
+| `necromancer.reset` | Clear an **escalated** guard back to normal and re-check it — a manual "try again" once you've fixed the root cause (or just to acknowledge the alarm). Still unhealthy → it recovers again; already healthy → it just resumes watching, no needless repair. |
+| `necromancer.snooze` | Suspend a guard for a `duration` — it **ignores health and raises no alerts** (planned maintenance), shows `snoozed`, then **auto-resumes** when the time elapses (the remaining time survives a restart). Unlike turning auto-recovery *off* (which still detects and alarms), snooze goes fully quiet. Refused while a recovery is in flight. |
+| `necromancer.unsnooze` | Resume a snoozed guard immediately instead of waiting for the timer. |
+| `necromancer.notify_guard` | Send a **custom message through a guard's own notify action** — target a guard (its status sensor / device) and pass `message` (plus optional `event_text`, `event`, `attempt`, `max`). The notify action receives the **same variables a built-in alert does**, so your existing template works unchanged. For recovery scripts reporting their own progress on the channel the guard already uses; from a recovery action use `target: {entity_id: "{{ guard_entity_id }}"}`. |
+| `necromancer.snooze_all` | **Maintenance mode for everything** — snooze *every* guard for a `duration` (no target needed), then they all auto-resume. Guards mid-recovery are skipped (best-effort, logged). Handy as a one-tap dashboard button before a disruptive change. |
+| `necromancer.unsnooze_all` | Resume every snoozed guard at once. |
+| `necromancer.repair_poe_port` | Resolve a device `id` (MAC / IP / static label) to its PoE port and power-cycle it. It blocks until done and **coalesces per port** — concurrent callers join the one in-flight cycle instead of each cycling the port. This is the exact primitive Auto-PoE uses — call it from your own actions or automations when you want "reboot whatever is on this device's port". |
+
+## Cookbook
+
+Real guards from a live deployment — each a step-by-step recipe under [`docs/cookbook/`](docs/cookbook/). What it does, which Necromancer concepts it shows, and what to use it for:
+
+| How-to | What it does | Concepts shown | Use it for |
+|---|---|---|---|
+| [Reboot a PoE access point](docs/cookbook/poe-access-point.md) | Cut PoE on the port to reboot the AP — gated so it never fires mid-flash or fleet-wide | Auto-PoE · firmware-update gate · controller-down gate | PoE APs, cameras, IP phones |
+| [Recover a bridge two ways at once](docs/cookbook/bridge-belt-and-braces.md) | Two detectors (ping + "are the lights there?") share one port reboot + integration reload | linked guards · count health · `repair_poe_port` + reload | Hue / Zigbee / Z-Wave bridges & hubs |
+| [Catch a device that's online but idle](docs/cookbook/inverter-sun-check.md) | Alert when a device is reachable but producing nothing — "is it doing its job?" | semantic health · notify-only | inverters, pumps, heat pumps |
+| [Restart a stalled chlorinator](docs/cookbook/chlorinator-restart.md) | Same semantic health, but with an automatic power-cycle + verify | semantic health · power-cycle + verify · smoothed input | chlorinators, pool pumps, heaters |
+| [Restart a pump, restore its interlocked device](docs/cookbook/pool-pump-restart.md) | Power-cycle a stalled pump and put the chlorinator back — carrying state across the off→on cycle | off/on actions · off→on variable carry · conditional restore · semantic health | pumps & devices behind a safety interlock |
+| [Alert when a Node-RED flow stalls](docs/cookbook/nodered-heartbeat.md) | Watch data freshness (`last_reported`); notify, or auto-redeploy with a health-check | freshness watchdog (`last_reported`) · notify or auto-redeploy | Node-RED flows, scrape / MQTT feeds |
+| [Escalating recovery](docs/cookbook/escalating-recovery.md) | Graceful restart first, then a sledgehammer (kill-button / add-on restart) if it didn't take | `if/then` escalation · soft→hard restart · health-check | containers, add-ons, services |
+| [Recover by poking another system](docs/cookbook/recover-via-another-system.md) | Restart via MQTT / REST / SSH / webhook when HA can't do it directly, verified by health | `action_call` · MQTT / REST / SSH · health-check | devices HA can't restart directly |
+| [One notification script for every guard](docs/cookbook/notification-fanout.md) | Centralize routing once — time-aware, multi-channel — instead of per-guard config | central notify fanout · time-aware routing | any multi-guard setup |
+
+## FAQ
+
+**Why didn't my guard react when the device went offline?**
+Either the health source read *unknown* rather than *faulty* (commonly: the entity went
+`unavailable` and you didn't list `unavailable` as an off-value), or the outage was shorter than the
+debounce window. Necromancer acts only on a confirmed, sustained fault.
+
+**Why is the status still `recovering`/`verify` long after the action ran?**
+With a health-check, the guard waits up to the boot window for the device to report healthy again.
+A device that boots slowly (a bridge can take minutes before its API and entities return) keeps the
+guard in `verify` until it's genuinely back — that's the "no false success" guarantee at work.
+Raise the boot window if your device needs longer.
+
+**Why did it stop after two tries and go `escalated`?**
+That's max attempts. The guard alerts you (if you set a notify action) rather than power-cycling
+forever. It clears back to `ok` on its own once health returns.
+
+**Why are both my linked guards showing `recovering` when only one is doing anything?**
+By design. Linked guards share a root cause, so when one repairs the others hold and re-verify
+afterwards, instead of running the same recovery in parallel.
+
+**I turned off a guard's auto-recovery — why is it `escalated`?**
+"Auto-recovery off" means the guard still watches and *alerts*, but won't act. A sustained fault
+therefore goes straight to `escalated` (your alarm) rather than being fixed silently — including
+when a linked partner is repairing the shared cause.
+
+**Auto-PoE says it can't find the port.** Exactly one port must match the guard's device id. Zero
+matches (the device is gone *and* there's no learned/last-known port) or several matches both block
+recovery on purpose — nothing random gets power-cycled. Check that one port reports that MAC/IP, or
+pin it with a fixed id (see *Identifying the right port* above).
+
+**Disabling the device's entities to test it doesn't trigger anything.** A *disabled* entity reads
+`unknown`, not `unavailable`, so a template checking `unavailable` won't fire. Simulate a real
+outage instead (cut power, unplug), or override the state — don't disable the entity.
+
+**Where's the option to link guards?** The *Linked guards* section only appears once there's
+another recover guard to link to — so your very first guard has nothing to offer there. Add the
+second guard, then link them from either guard's **Reconfigure**.
+
+**When should I pick a "with health-check" strategy?** Whenever the recovery can fail *silently* —
+for example Auto-PoE/`repair_poe_port` with an id that might not resolve, or an action whose effect
+you can't otherwise confirm. The health-check variants only declare success once the device reports
+healthy again; the plain (fire-and-forget) variants assume the action worked and rely on continuous
+monitoring to re-trigger if it didn't, which can mean one premature "recovered" notification.
+
+**What happens if Home Assistant restarts mid-recovery?** The in-flight cycle is dropped — on startup
+the guard re-evaluates from live health and takes it from there. Only the lasting verdicts survive a
+restart: an `escalated` alarm and an active `snooze` (with its remaining time), plus the recovery
+stats (`recover_count`, `last_recover`) and the per-guard auto-recovery switch.
 
 ## Architecture & internals
 

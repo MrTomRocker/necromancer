@@ -32,7 +32,7 @@ pays off** (the PoE port resolver is the single bespoke driver).
 
 ---
 
-## 2. Configuration model
+## 2. Configuration model & lifecycle
 
 Necromancer is a **single service** config entry (`integration_type: service`, added
 once, blank). Everything else hangs off it:
@@ -51,6 +51,49 @@ see a fresh port list.
 There is **no per-area grouping** and no second config entry — an earlier
 two-entry split was reverted because the HA frontend can’t filter the subentry
 picker by type (it would offer both services for every “Add” button).
+
+### How Necromancer maps onto HA — the object graph
+
+```
+ConfigEntry  (one, integration_type: service)      entry.entry_id — stable ULID
+├─ runtime_data : NecromancerData                  per-entry, dies on unload
+│    └─ engines : { subentry_id → DeviceEngine }   one engine per guarded device
+├─ subentries  : { subentry_id → device cfg }      the guarded-device config
+├─ options     : { ports: [...] }                  PoE port list (options flow)
+└─ Store  .storage/necromancer.<entry_id>          durable truth (survives restart)
+
+hass.data[DOMAIN]["fabric"] : PoeFabric            domain singleton, outlives reloads
+```
+
+Each `DeviceEngine` owns its view entities (`sensor` / `binary_sensor` / `switch` /
+`button` / `event`). Those entities are **pure view** (§9); the engine + Store hold
+the truth (§3). `hass.states` is only a volatile in-RAM snapshot, rebuilt from the
+Store on every restart — never the source of truth.
+
+### Lifecycle — what HA calls, and when
+
+| HA calls (by name) | When |
+|---|---|
+| `async_setup_entry` | entry loaded: boot, first add, **after every reload** — builds all engines, then `async_forward_entry_setups` creates the entities. |
+| `async_unload_entry` | entry torn down: shutdown, **before every reload**, removal — flushes the Store, stops engines, unloads platforms. |
+| `async_remove_config_entry_device` | user deletes a guarded device in the UI. |
+| `_async_reload_entry` (registered update listener) | the entry's options/subentries change — calls `async_reload`. |
+
+**One entry → full rebuild.** Every change (a port option, a device subentry, a
+health-entity rename) funnels through the update listener →
+`hass.config_entries.async_reload` → `async_unload_entry` **then**
+`async_setup_entry`. There is no incremental update: *all* engines are torn down and
+rebuilt even when a single device changed. Blunt but correct — the whole
+engine/link/port graph depends on the config, and at Necromancer's scale (a handful
+of guards) the cost is irrelevant. The `entry_id` is stable across reloads and
+restarts; only `subentry_id`s tell you *which* guard changed.
+
+### Runtime updates — entities are push-only
+
+Entities never poll. On any change the engine calls `_emit()`, which invokes each
+subscribed entity's `async_write_ha_state`; HA then reads the entity's properties
+(`is_on`, `available`, …) and writes a fresh `State` into `hass.states`. One
+`_emit()` refreshes a guard's whole entity set at once. (Entity wiring: §9.)
 
 ---
 
@@ -173,6 +216,16 @@ The wizard’s first step picks the source type (`state_based` / `template_based
 User actions are validated (`cv.SCRIPT_SCHEMA` + `async_validate_actions_config`)
 and run via the `Script` helper (`core/actions.py`), blocking for recovery, detached
 for notifications.
+
+**Action variable scope.** `recover(variables)` is handed the engine's run context —
+`attempt`, `max`, `name`, `guard_entity_id` (the guard's status sensor, e.g. the
+`necromancer.notify_guard` target) — which the action-running drivers (`action_call`,
+`action_cycle`) seed into the script run as template variables (`switch_cycle` / `poe_port` /
+`noop` ignore it). `async_run` returns the run's **final variable scope** (minus HA's injected
+`context`), and `action_cycle` feeds the off action's scope into the on action — so off-phase
+`variables:` and the engine context are both readable in the on phase, with no helper entity to
+carry state across the power-cycle. Variables are per-attempt (each retry runs off→on fresh);
+nothing leaks between attempts.
 
 ### The strategy matrix
 
@@ -306,7 +359,8 @@ picking notify-only routes to a notification step instead of a recovery one. The
 is no separate "mode" field — the notify-vs-recover choice *is* the strategy choice.
 
 - **Sections.** Fields are grouped into `data_entry_flow.section`s with a heading
-  and description (state check, behaviour, notification, assigned device, and —
+  and description (state check, recovery action, behaviour, notification, assigned
+  device, linked guards, and —
   only when a device is assigned — *reload* the assigned device's integration after
   a repair; ports: switch / recognition / status / timing). Sections nest their
   values, so submitted input is flattened back up (`_flatten_sections`).
@@ -341,10 +395,11 @@ is no separate "mode" field — the notify-vs-recover choice *is* the strategy c
   round-trips cleanly: `_ports_to_yaml` quotes on/off values and import coerces
   YAML 1.1 booleans (`on`/`off`/`yes`) back to strings, so the bool footgun can’t
   corrupt a status list.
-- **Translations.** `strings.json` is the source; `translations/en.json` is an
-  exact copy; `translations/de.json` mirrors it. HA renders config translations
-  via **ICU MessageFormat**, so descriptions must contain **no `{…}` braces**
-  except real `description_placeholders`.
+- **Translations.** Custom components ship **no `strings.json`** (it is a Core
+  build-time source); `translations/en.json` is the source HA loads directly, and
+  `translations/de.json` mirrors it. HA renders config translations via **ICU
+  MessageFormat**, so descriptions must contain **no `{…}` braces** except real
+  `description_placeholders`.
 
 ---
 

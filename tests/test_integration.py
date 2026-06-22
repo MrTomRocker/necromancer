@@ -137,7 +137,7 @@ class _Noop:
     async def can_recover(self):
         return True, ""
 
-    async def recover(self):
+    async def recover(self, variables=None):
         self.calls += 1
 
     def target_info(self):

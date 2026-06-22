@@ -29,6 +29,7 @@ class NecromancerEntity(Entity):
     _attr_should_poll = False
 
     def __init__(self, engine: DeviceEngine, subentry_id: str, key: str) -> None:
+        """Initialize the entity."""
         self._engine = engine
         self._subentry_id = subentry_id
         self._attr_unique_id = f"{subentry_id}_{key}"
@@ -51,10 +52,12 @@ class NecromancerEntity(Entity):
 
     @staticmethod
     def _linked_device(engine: DeviceEngine) -> dr.DeviceEntry | None:
+        """Return the linked target device, or None when standalone."""
         if engine.link_device_id:
             return dr.async_get(engine.hass).async_get(engine.link_device_id)
         return None
 
     async def async_added_to_hass(self) -> None:
+        """Subscribe to engine updates when added to hass."""
         await super().async_added_to_hass()
         self.async_on_remove(self._engine.add_listener(self.async_write_ha_state))

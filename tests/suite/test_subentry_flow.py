@@ -180,7 +180,11 @@ async def test_empty_action_rejected(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"action": [], "behavior": {"debounce": 5, "cooldown": 10}, "notification": {}},
+        {
+            "recovery_action": {"action": []},
+            "behavior": {"debounce": 5, "cooldown": 10},
+            "notification": {},
+        },
     )
     assert result["step_id"] == "action"
     assert result["errors"] == {"action": "action_required"}

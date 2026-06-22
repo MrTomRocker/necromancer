@@ -46,7 +46,7 @@ one of them:
 ## 2. Level 1 — unit (pure logic / real `hass`)
 
 Fast, deterministic. Three runnable in-process modules cover this level today (run
-them with the dev venv, see §5): **`tests/test_units.py`** (21), **`tests/test_poe.py`**
+them with the dev venv, see §5): **`tests/test_units.py`** (26), **`tests/test_poe.py`**
 (16), **`tests/test_engine.py`** (34). On top sits a **pytest suite on HA's native test
 harness** (`tests/suite/`, run via `pytest tests/components/necromancer/`) that automates
 Level 2 in-process — see §3. Each row maps to an invariant:
@@ -173,6 +173,6 @@ A clean run starts from an empty service entry (delete leftover `device` subentr
 - `ruff check` / `ruff format` (custom-component exceptions: `D10x` docstrings and
   `TID25x` absolute-import/`__future__` rules don’t apply).
 - `python -m py_compile` over all modules.
-- Translation symmetry: `strings.json` keys == `en.json` == `de.json`; placeholder
-  sets per key consistent; **no `{{`** in any description; every step has a
-  `description`.
+- Translation symmetry: `translations/en.json` keys == `de.json` (custom components
+  ship no `strings.json`); placeholder sets per key consistent; **no `{{`** in any
+  description; every step has a `description`.

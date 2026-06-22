@@ -13,9 +13,7 @@ empty/unknown result or a render error is UNKNOWN (no false alarm).
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import (
     TrackTemplate,
@@ -33,11 +31,13 @@ class TemplateHealth(HealthSource):
     """Map a boolean Jinja template to OK / UNHEALTHY / UNKNOWN."""
 
     def __init__(self, hass: HomeAssistant, config: dict) -> None:
+        """Compile the configured Jinja template once."""
         super().__init__(hass, config)
         self._template = Template(config["template"], hass)
 
     @property
     def watched_entities(self) -> list[str]:
+        """Return no watched entities; the template registers its own tracker."""
         return []
 
     def referenced_entities(self) -> list[str]:
@@ -48,6 +48,7 @@ class TemplateHealth(HealthSource):
             return []
 
     def evaluate(self) -> Health:
+        """Render the template now and map it to OK / UNHEALTHY / UNKNOWN."""
         try:
             result = self._template.async_render(parse_result=True)
         except TemplateError:
@@ -58,9 +59,9 @@ class TemplateHealth(HealthSource):
             return Health.UNKNOWN
         return Health.OK if result_as_boolean(result) else Health.UNHEALTHY
 
-    async def async_setup(
-        self, on_change: Callable[[], None]
-    ) -> Callable[[], None] | None:
+    async def async_setup(self, on_change: CALLBACK_TYPE) -> CALLBACK_TYPE | None:
+        """Track the template and call `on_change` on any referenced change."""
+
         @callback
         def _changed(_event: Event | None, _updates: list[TrackTemplateResult]) -> None:
             on_change()
@@ -72,4 +73,5 @@ class TemplateHealth(HealthSource):
         return info.async_remove
 
     def describe(self) -> str:
+        """Return a short human description for diagnostics."""
         return f"template: {self.config['template']}"

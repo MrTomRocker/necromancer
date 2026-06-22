@@ -78,7 +78,7 @@ async def _to_strategy(
             "action",
             "action",
             {
-                "action": SAMPLE_ACTION,
+                "recovery_action": {"action": SAMPLE_ACTION},
                 "behavior": NON_CHECK_BEHAVIOR,
                 "notification": {},
             },
@@ -90,7 +90,7 @@ async def _to_strategy(
             "action_check",
             "action",
             {
-                "action": SAMPLE_ACTION,
+                "recovery_action": {"action": SAMPLE_ACTION},
                 "behavior": CHECK_BEHAVIOR,
                 "notification": {},
             },
@@ -102,9 +102,11 @@ async def _to_strategy(
             "actions",
             "actions",
             {
-                "off_action": SAMPLE_ACTION,
-                "on_action": SAMPLE_ACTION,
-                "off_on_delay": 2,
+                "recovery_action": {
+                    "off_action": SAMPLE_ACTION,
+                    "on_action": SAMPLE_ACTION,
+                    "off_on_delay": 2,
+                },
                 "behavior": NON_CHECK_BEHAVIOR,
                 "notification": {},
             },
@@ -116,9 +118,11 @@ async def _to_strategy(
             "actions_check",
             "actions",
             {
-                "off_action": SAMPLE_ACTION,
-                "on_action": SAMPLE_ACTION,
-                "off_on_delay": 2,
+                "recovery_action": {
+                    "off_action": SAMPLE_ACTION,
+                    "on_action": SAMPLE_ACTION,
+                    "off_on_delay": 2,
+                },
                 "behavior": CHECK_BEHAVIOR,
                 "notification": {},
             },

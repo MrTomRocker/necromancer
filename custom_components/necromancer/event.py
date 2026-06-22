@@ -21,6 +21,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the event platform from a config entry."""
     for subentry_id, engine in entry.runtime_data.engines.items():
         if not engine.allows_recovery:
             continue  # notify-only guard has no recovery events
@@ -37,13 +38,16 @@ class RecoveryEvent(NecromancerEntity, EventEntity):
     _attr_event_types = ["recovered", "escalated", "blocked"]
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
+        """Initialize the recovery event entity."""
         super().__init__(engine, subentry_id, "recovery_event")
 
     async def async_added_to_hass(self) -> None:
+        """Subscribe to engine updates when added to hass."""
         await super().async_added_to_hass()
         self.async_on_remove(self._engine.add_event_listener(self._handle))
 
     @callback
     def _handle(self, event_type: str, data: dict) -> None:
+        """Trigger the recovery event and write state."""
         self._trigger_event(event_type, data)
         self.async_write_ha_state()

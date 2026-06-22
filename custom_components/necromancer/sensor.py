@@ -12,7 +12,18 @@ from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import NecromancerConfigEntry
-from .const import ATTR_DURATION, SERVICE_RESET, SERVICE_SNOOZE, SERVICE_UNSNOOZE
+from .const import (
+    ATTR_ATTEMPT,
+    ATTR_DURATION,
+    ATTR_EVENT,
+    ATTR_EVENT_TEXT,
+    ATTR_MAX,
+    ATTR_MESSAGE,
+    SERVICE_NOTIFY_GUARD,
+    SERVICE_RESET,
+    SERVICE_SNOOZE,
+    SERVICE_UNSNOOZE,
+)
 from .core.engine import DeviceEngine, GState
 from .entity import NecromancerEntity
 
@@ -22,6 +33,7 @@ async def async_setup_entry(
     entry: NecromancerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the sensor platform from a config entry."""
     for subentry_id, engine in entry.runtime_data.engines.items():
         async_add_entities(
             [StatusSensor(engine, subentry_id)], config_subentry_id=subentry_id
@@ -37,6 +49,17 @@ async def async_setup_entry(
         "async_snooze",
     )
     platform.async_register_entity_service(SERVICE_UNSNOOZE, None, "async_unsnooze")
+    platform.async_register_entity_service(
+        SERVICE_NOTIFY_GUARD,
+        {
+            vol.Required(ATTR_MESSAGE): cv.string,
+            vol.Optional(ATTR_EVENT, default="custom"): cv.string,
+            vol.Optional(ATTR_EVENT_TEXT): cv.string,
+            vol.Optional(ATTR_ATTEMPT): vol.Coerce(int),
+            vol.Optional(ATTR_MAX): vol.Coerce(int),
+        },
+        "async_notify_guard",
+    )
 
 
 class StatusSensor(NecromancerEntity, SensorEntity):
@@ -48,14 +71,17 @@ class StatusSensor(NecromancerEntity, SensorEntity):
     _attr_options = [s.value for s in GState]
 
     def __init__(self, engine: DeviceEngine, subentry_id: str) -> None:
+        """Initialize the status sensor."""
         super().__init__(engine, subentry_id, "status")
 
     @property
     def native_value(self) -> str:
+        """Return the current lifecycle state."""
         return self._engine.state.value
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Return the status attributes."""
         e = self._engine
         return {
             "attempt": e.attempt,
@@ -77,3 +103,17 @@ class StatusSensor(NecromancerEntity, SensorEntity):
     async def async_unsnooze(self) -> None:
         """necromancer.unsnooze — lift a snooze early."""
         self._engine.unsnooze()
+
+    async def async_notify_guard(
+        self,
+        message: str,
+        event: str,
+        event_text: str | None = None,
+        attempt: int | None = None,
+        max: int | None = None,
+    ) -> None:
+        """necromancer.notify_guard — send a custom message via the guard's notify action."""
+        params = {
+            k: v for k, v in (("attempt", attempt), ("max", max)) if v is not None
+        }
+        await self._engine.async_notify_custom(message, event, event_text, **params)
