@@ -69,7 +69,7 @@ python -m coverage html -d <repo>/htmlcov
 - `setup_guards(*guard_dicts, options=…)` — async factory: create a service
   `MockConfigEntry` with those guards as subentries, set it up, assert it loaded.
 - `entity_id_for(hass, subentry_id, domain, key)` — resolve a guard's view-entity
-  id via the registry (`status`, `health`, `auto_restart`, `recover`).
+  id via the registry (`status`, `health`, `auto_restart`, `recover`, `recovery_event`).
 
 ## Two flow-rejection idioms
 

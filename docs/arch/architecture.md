@@ -128,7 +128,7 @@ health is ignored, no transitions, no alerts (planned maintenance). `snooze` tak
 `duration`, **auto-resumes** when it elapses (the remaining time survives a restart), and is
 refused (`ServiceValidationError`) while a recovery cycle is in flight; a snoozed guard also
 never follows a linked-group repair. Recovering *now* stays the `button.<guard>_revive`,
-arming the `switch.<guard>_auto_recovery`. `reset`/`snooze`/`unsnooze` are **entity** services
+arming the `switch.<guard>_auto_recovery`. `reset`/`snooze`/`unsnooze`/`notify_guard` are **entity** services
 on the sensor platform (per guard / device / area); `snooze_all` + `unsnooze_all` are
 **domain** services (no target, every guard — "maintenance mode"; busy guards skipped
 best-effort) registered in `__init__` alongside `repair_poe_port`.
@@ -419,7 +419,7 @@ an attribute) and "last seen healthy" is left to state history.
 
 **Per-guard services** are registered on the sensor platform via
 `async_register_entity_service` (targeted at `sensor.*_status`; device/area targets
-expand to it): `reset`, `snooze(duration)`, `unsnooze` (see §3). The status sensor
+expand to it): `reset`, `snooze(duration)`, `unsnooze`, `notify_guard` (see §3). The status sensor
 also carries the `snooze_until` attribute. Recover-now and arm stay the button/switch
 rather than duplicating them as services; the port-level `repair_poe_port` (§5) is the
 one domain-level service.
