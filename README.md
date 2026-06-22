@@ -3,11 +3,11 @@
 [![GitHub release](https://img.shields.io/github/release/MrTomRocker/homeassistant-necromancer?include_prereleases=&sort=semver&color=blue)](https://github.com/MrTomRocker/homeassistant-necromancer/releases/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](#license)
 [![issues](https://img.shields.io/github/issues/MrTomRocker/homeassistant-necromancer)](https://github.com/MrTomRocker/homeassistant-necromancer/issues)
-![HACS](https://img.shields.io/badge/HACS-none-inactive)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5)](https://github.com/hacs/integration)
 [![Downloads](https://img.shields.io/github/downloads/MrTomRocker/homeassistant-necromancer/total)](https://github.com/MrTomRocker/homeassistant-necromancer/releases)
 
 <div align="center">
-  <img width="70%" alt="Necromancer guards overview" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/overview.png">
+  <img width="100%" alt="Necromancer — self-healing for every Home Assistant device & service" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/hero_banner.png">
 </div>
 
 **Necromancer is a generic self-healing framework for Home Assistant.** It watches your
@@ -18,7 +18,7 @@ vendor-agnostic, as an orchestrator on top of the entities you already have.
 
 ---
 
-**Start here:** [Why Necromancer?](#why-necromancer) · [Installation](#installation) · [Getting started](#getting-started)
+**Start here:** [Why Necromancer?](#why-necromancer) · [Features](#features) · [Installation](#installation) · [Getting started](#getting-started)
 **Understand it:** [How it works](#how-it-works) · [Health sources](#health-sources) · [Recovery strategies](#recovery-strategies) · [Timing & behaviour](#timing--behaviour) · [What you get](#what-you-get-per-guarded-device)
 **Go deeper:** [Linked guards](#linked-guards-groups) · [Supervisor guards](#supervisor-guards-watch-other-guards) · [PoE ports](#poe-ports) · [Notifications](#notifications) · [Services](#services)
 **Use & support:** [Cookbook](#cookbook) · [FAQ](#faq) · [Architecture](#architecture--internals) · [Contributing](#contributing) · [License](#license)
@@ -38,32 +38,67 @@ Necromancer is vendor-agnostic. It watches **any** health signal you already hav
 automatically** (by MAC, hostname or neighbour, even after you move the cable), cycles it, and
 **confirms the device is healthy again** before calling it done.
 
-> *Example:* a Hue bridge guarded by a ping sensor. It goes unreachable → Necromancer finds the
-> PoE port it's plugged into, cuts power, waits for the port and the bridge to come back, and
-> only then clears the alarm. One guard replaces the whole brittle automation.
+> *Examples:* a **Hue bridge** on a ping sensor → Necromancer finds its PoE port, cuts power, waits
+> for it to come back, and only then clears the alarm. A wedged **Docker container** → a graceful
+> restart, and a force-kill if that didn't take — both in one attempt. A **solar inverter** that's
+> *"online but making 0 W at noon"* → caught by a template and alerted. One guard each, no brittle
+> automation.
 
 **What sets it apart:**
 
 - **It verifies — it doesn't hope.** A recovery counts as done only once health reads OK *again*;
-  an action that ran but didn't fix anything is a failed attempt, not a success. And ambiguous
-  health (missing entity, render error, `unknown`/`unavailable`) is treated as *unknown*, never a
-  fault — so nothing is ever power-cycled on a hunch.
+  an action that ran but didn't fix anything is a failed attempt, not a success. Ambiguous health
+  (missing entity, render error, `unknown`/`unavailable`) is treated as *unknown* — never a fault,
+  so nothing is power-cycled on a hunch.
 - **Vendor-neutral PoE that finds the port for you.** No UniFi/Omada/Netgear lock-in: point it at
   any switch that reports its ports (or pin a static mapping) and it resolves device → port by
-  MAC/IP/name — and still recovers a device that has already dropped off the switch and aged out of
-  the neighbour table.
-- **One engine instead of a pile of automations.** Each device is a *guard* — health + recovery +
-  timing — clicked together in a wizard. No per-device scripts, no `if unreachable for 5 min` YAML.
-- **Guards cooperate.** Link guards that share a root cause so exactly one repairs and the rest
-  follow; or stage cheap fixes under a **supervisor guard** that escalates to a heavier one once the
-  small ones give up.
-- **Local and dependency-free.** No cloud, no extra Python packages, no polling devices it doesn't
-  own — it orchestrates the entities you already have, and its verdicts survive a restart.
+  MAC/IP/name — even after the device has dropped off the switch and aged out of the neighbour table.
+- **One engine, and guards that cooperate.** Each device is a *guard* (health + recovery + timing)
+  built in a wizard — not a pile of `if unreachable for 5 min` YAML. Link guards that share a root
+  cause so one repairs and the rest follow, or stage cheap fixes under a **supervisor** guard.
 
 Under the hood it's three pluggable layers, each with a generic escape hatch so the common case
 needs no custom code:
 
 > **HealthSource** *(is it ok?)* → **Engine** *(lifecycle + timing)* → **RecoveryDriver** *(fix it)*
+
+## Features
+
+**One harmonized workflow for every device and service.** A Hue bridge, a Docker container, a smart
+plug, a PoE camera or a cloud bridge — all guarded with the *same* model (health → recovery → verify
+→ timing), vendor- and protocol-agnostic. No bespoke per-device scripts.
+
+🔎 **Detect — is it broken?**
+
+- 🩺 **Two health sources** — any entity's state/attribute, or an inline **Jinja template** (e.g. *"online but drawing 0 W"*). Ambiguous readings (`unknown`/`unavailable`, render errors) count as *unknown*, never a fault.
+
+🛠 **Recover — fix it**
+
+- 🔌 **Power-cycle a switch** — a smart plug, relay or any `switch`/`input_boolean`: off → wait → on.
+- ▶️ **Run any action** — a script, service call, SSH, `rest_command`, webhook, MQTT — anything Home Assistant can do.
+- 🔁 **Off/on action pair** — cut power one way, restore it another, with variables carried from the *off* step into the *on* step (no helper entity needed).
+- 🧪 **Rich Jinja context for your actions** — recovery actions receive `attempt` / `max` / `name` / `guard_entity_id`, and notify actions a full alert variable set — so deeply-integrated actions and automations can branch on the live recovery context.
+- 🐳 **Restart containers, add-ons & services** — graceful first, then a harder fallback *inside the same attempt* (`if/then`, `wait_template`).
+- 🔄 **Reload the device's integration after a repair** — an optional checkbox: Necromancer reloads the assigned device's config entry (before re-checking health), so Home Assistant reconnects to a device that just came back.
+- 📡 **Vendor-neutral Auto-PoE** — resolves a device to its PoE port by MAC / IP / name and power-cycles it; no UniFi/Omada/Netgear lock-in, and it works even after the device aged out of the switch.
+- 📤 **Bulk YAML import/export** — manage the PoE port list as YAML for bigger setups (export → edit → import, round-trip-safe).
+- ✅ **Verify, don't hope** — a fix only counts once health reads OK *again*; otherwise it retries up to your limit, then escalates.
+
+🤝 **Coordinate & alert**
+
+- 🔗 **Guards cooperate** — link guards that share a root cause (one repairs, the rest follow), or stage cheap fixes under a **supervisor** guard that escalates to a heavier one.
+- 🛎️ **Notifications are yours** — every problem / recovery / escalation runs an action *you* define (push, TTS, a script); a guard can even push its own progress messages mid-recovery via `necromancer.notify_guard`.
+
+⚙️ **Operate & integrate**
+
+- 🎛️ **Full operator surface** — per-guard status & health entities, a revive button, an arm/disarm switch, and recovery `event`s for dashboards and automations.
+- 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard`, callable from any automation or script (e.g. snooze everything before a mass reboot, or cycle a PoE port on demand).
+- 😴 **Maintenance mode** — `snooze` one guard or `snooze_all` before planned work; they go quiet and auto-resume.
+- 🧰 **Wizard-built & reconfigurable** — create and edit guards entirely in the UI; no YAML to hand-write.
+- 🏠 **Local & dependency-free** — no cloud, no extra Python packages; it orchestrates the entities you already have, and its verdicts (escalated, snooze) survive a restart.
+- 🌍 **Localized** — full English and German UI.
+
+👉 **Real-world use cases:** see the **[Cookbook](#cookbook)** — PoE access points, Hue / Zigbee / Z-Wave bridges, Docker containers, pool pumps, solar inverters, Node-RED watchdogs and more.
 
 ## Installation
 
@@ -242,9 +277,8 @@ A few consequences worth knowing:
 
 ## What you get per guarded device
 
-Pure-view entities (on their own device, or attached to an existing device via the
-Battery-Notes link pattern) — recover guards get all five, notify-only guards just the
-status sensor + health:
+Pure-view entities (on their own device, or attached to the device you assign the guard to) —
+recover guards get all five, notify-only guards just the status sensor + health:
 
 | Entity | Purpose |
 |---|---|
