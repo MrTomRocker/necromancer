@@ -46,7 +46,7 @@ one of them:
 ## 2. Level 1 — unit (pure logic / real `hass`)
 
 Fast, deterministic. Three runnable in-process modules cover this level today (run
-them with the dev venv, see §5): **`tests/test_units.py`** (26), **`tests/test_poe.py`**
+them with the dev venv, see §5): **`tests/test_units.py`** (28), **`tests/test_poe.py`**
 (16), **`tests/test_engine.py`** (34). On top sits a **pytest suite on HA's native test
 harness** (`tests/suite/`, run via `pytest tests/components/necromancer/`) that automates
 Level 2 in-process — see §3. Each row maps to an invariant:

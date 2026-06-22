@@ -74,9 +74,12 @@ is the **cooldown** (post-success), not a retry gap.
 | `VERIFY` | after the action, `*_check` | **boot_window** | → `COOLDOWN` (healthy) · → `RECOVERING` (retry) · → `ESCALATED` (out of attempts) |
 | `COOLDOWN` | success | **cooldown** | → `OK` (healthy) · → `SUSPECT` (unhealthy) |
 | `ESCALATED` | gave up / blocked / auto-off | none | → `OK` automatically once health returns (clears the verdict) |
+| `SNOOZED` | operator `necromancer.snooze` / `snooze_all` | **remaining snooze duration** | → `OK` (auto-resume on elapse, re-derives from health) · → `OK` (`unsnooze` / `unsnooze_all`, early). Health is ignored while snoozed. |
 
-`ESCALATED` is the only **persisted transient** — a dead device gets no free retry on
-reboot; it self-clears via `ESCALATED → OK` when health comes back.
+`ESCALATED` and `SNOOZED` are the **persisted transients** — a dead device gets no free
+retry on reboot (`ESCALATED` self-clears via `ESCALATED → OK` when health comes back),
+and a deliberate snooze survives a restart (re-arms the remaining time, or resumes
+immediately if it already elapsed).
 
 ---
 
@@ -190,6 +193,19 @@ Every distinct case the system handles. *(C = confirmed by a test/probe; L = see
 | `recover_count`, `last_recover`, `last_seen`, `auto` | restored from the Store. |
 | transient `RECOVERING`/`VERIFY`/`COOLDOWN` | **not** restored — re-derived from live health. |
 | PoE last-known port (fabric `_poe_cache`) | restored, so a `poe_port` guard keeps its fallback target across a reboot. |
+| `SNOOZED` + snooze still active | restored as `SNOOZED`; the remaining snooze time is re-armed on start. |
+| `SNOOZED` + snooze already elapsed | resumes to `OK` and re-derives from live health. |
+
+### Snooze (operator `necromancer.snooze` / `unsnooze`)
+
+| Case | Behaviour |
+|---|---|
+| `snooze` a guard | `SNOOZED` for the duration; health ignored (no detection/recovery). |
+| snooze timer elapses | auto-resumes to `OK`, re-deriving from live health. |
+| `unsnooze` / `unsnooze_all` | lifts the snooze early, back to `OK` + re-derive. |
+| `snooze` during an active recovery (`RECOVERING`/`VERIFY`) | refused — raises `ServiceValidationError` (`snooze_during_recovery`). |
+| `snooze_all` with some guards recovering | snoozes the rest; busy guards skipped (WARNING), no error raised. |
+| snooze persisted across restart | restored as `SNOOZED`; remaining time re-armed (or resumes if elapsed). |
 
 ### PoE (`poe_port` driver & fabric)
 

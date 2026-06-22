@@ -13,7 +13,7 @@ GitHub is used to host the code, to track issues and feature requests, and to ac
 
 Pull requests are the best way to propose changes to the codebase:
 
-1. Fork the repo and create your branch from `main`.
+1. Fork the repo and create your branch from `dev`.
 2. If you've changed behaviour, update the documentation (`README.md` and the relevant page under [`docs/arch/`](./docs/arch)).
 3. Make sure your code lints and is formatted (see [Coding style](#coding-style)).
 4. Test your contribution (see [Testing](#testing)).
@@ -55,7 +55,7 @@ The project uses [`ruff`](https://docs.astral.sh/ruff/) for both linting and for
 ```bash
 ruff check custom_components/necromancer
 ruff format custom_components/necromancer
-python -m py_compile custom_components/necromancer/*.py
+python -m compileall custom_components/necromancer
 ```
 
 Additional house rules:
