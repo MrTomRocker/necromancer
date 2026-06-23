@@ -16,6 +16,21 @@ switch, run an action, or auto-resolve a device to its PoE port and reboot it. I
 usual pile of bespoke *"ping → reload/restart"* automations with one configurable engine,
 vendor-agnostic, as an orchestrator on top of the entities you already have.
 
+<table align="center">
+  <tr>
+    <td align="center" width="50%"><b>🔌 Auto-PoE — access point</b></td>
+    <td align="center" width="50%"><b>🔁 Smart plug — pool pump</b></td>
+  </tr>
+  <tr>
+    <td><img width="100%" alt="Necromancer recovering a hung PoE access point" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/poe.gif"></td>
+    <td><img width="100%" alt="Necromancer recovering a stalled smart-plug pool pump" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/switch.gif"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Ping spikes → the PoE port is power-cycled → recovery <b>verified</b>.</sub></td>
+    <td align="center"><sub>Power draw collapses → the smart plug is power-cycled → recovery <b>verified</b>.</sub></td>
+  </tr>
+</table>
+
 ---
 
 **Start here:** [Why Necromancer?](#why-necromancer) · [Features](#features) · [Installation](#installation) · [Getting started](#getting-started)
