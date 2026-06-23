@@ -46,6 +46,8 @@ async def test_entity_state_on_off_unknown(hass, _):
     assert h.evaluate() is Health.UNKNOWN  # not in on/off lists -> unknown
     hass.states.async_set("sensor.x", "unavailable")
     assert h.evaluate() is Health.UNKNOWN  # ambiguous -> no false alarm
+    hass.states.async_set("sensor.x", "unknown")
+    assert h.evaluate() is Health.UNKNOWN  # ambiguous -> no false alarm
 
 
 async def test_entity_state_unavailable_as_off(hass, _):
@@ -58,6 +60,16 @@ async def test_entity_state_unavailable_as_off(hass, _):
     assert h.evaluate() is Health.UNHEALTHY  # explicit off wins over ambiguity
     assert create_health(hass, {"type": "entity_state", "entity_id": "sensor.absent",
                                 "on_value": ["on"]}).evaluate() is Health.UNKNOWN
+
+
+async def test_entity_state_unknown_as_off(hass, _):
+    h = create_health(
+        hass,
+        {"type": "entity_state", "entity_id": "sensor.z",
+         "on_value": ["on"], "off_value": ["unknown"]},
+    )
+    hass.states.async_set("sensor.z", "unknown")
+    assert h.evaluate() is Health.UNHEALTHY  # explicit off wins over ambiguity
 
 
 async def test_entity_state_legacy_healthy_state(hass, _):
