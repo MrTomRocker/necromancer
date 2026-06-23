@@ -37,7 +37,9 @@ jobs:
         working-directory: core
         run: |
           pip install --upgrade pip
-          pip install -e . -r requirements_test.txt
+          # paho-mqtt: core's tests/common.py imports paho.mqtt at module level,
+          # but it ships via the mqtt integration, not requirements_test.txt.
+          pip install -e . -r requirements_test.txt paho-mqtt
 
       - name: Link Necromancer into the core test tree
         run: |
