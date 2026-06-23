@@ -42,6 +42,12 @@ vendor-agnostic, as an orchestrator on top of the entities you already have.
 
 ## Why Necromancer?
 
+It started as a mess of my own making: my *"is this device dead? → fix it"* logic was spread
+across **pyscript, Node-RED and a stack of Home Assistant automations** — every device handled a
+little differently, and half of them never even checked whether the thing actually came back. I
+wanted **one harmonized workflow** for every device and service instead of rebuilding
+*"ping → restart"* by hand each time. So I built Necromancer.
+
 Devices die quietly. A Hue bridge that needs a power-cycle, an access point that drops off the
 network, a camera that hangs — each one usually ends up with its own hand-written
 *"if unreachable for 5 minutes, toggle this switch and hope"* automation. They're brittle, they
