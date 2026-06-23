@@ -46,12 +46,15 @@ jobs:
           mkdir -p core/tests/testing_config/custom_components
           ln -s "$GITHUB_WORKSPACE/integration/custom_components/necromancer" \
                 core/tests/testing_config/custom_components/necromancer
+          # Place the suite under tests/ but NOT tests/components/, so pytest only
+          # loads tests/conftest.py (needs paho, installed) and not the shared
+          # tests/components/conftest.py (which imports many integration deps).
           ln -s "$GITHUB_WORKSPACE/integration/tests/suite" \
-                core/tests/components/necromancer
+                core/tests/necromancer
 
       - name: pytest suite
         working-directory: core
-        run: python -m pytest tests/components/necromancer/ -q
+        run: python -m pytest tests/necromancer/ -q
 
       - name: In-process unit scripts
         working-directory: integration
