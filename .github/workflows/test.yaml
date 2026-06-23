@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"
+
+env:
+  # Home Assistant core version the tests run against. The suite uses the core
+  # test harness (tests.common, enable_custom_integrations), so it needs a core
+  # checkout rather than pytest-homeassistant-custom-component. Bump as needed.
+  HA_CORE_REF: dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration
+        uses: actions/checkout@v7
+        with:
+          path: integration
+
+      - name: Checkout Home Assistant core (${{ env.HA_CORE_REF }})
+        uses: actions/checkout@v7
+        with:
+          repository: home-assistant/core
+          ref: ${{ env.HA_CORE_REF }}
+          path: core
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: core/.python-version
+
+      - name: Install Home Assistant core + test deps
+        working-directory: core
+        run: |
+          pip install --upgrade pip
+          pip install -e . -r requirements_test.txt
+
+      - name: Link Necromancer into the core test tree
+        run: |
+          mkdir -p core/tests/testing_config/custom_components
+          ln -s "$GITHUB_WORKSPACE/integration/custom_components/necromancer" \
+                core/tests/testing_config/custom_components/necromancer
+          ln -s "$GITHUB_WORKSPACE/integration/tests/suite" \
+                core/tests/components/necromancer
+
+      - name: pytest suite
+        working-directory: core
+        run: python -m pytest tests/components/necromancer/ -q
+
+      - name: In-process unit scripts
+        working-directory: integration
+        run: |
+          for f in test_units test_poe test_engine test_integration; do
+            echo "::group::$f"
+            PYTHONPATH="$GITHUB_WORKSPACE/core:$GITHUB_WORKSPACE/integration" \
+              python "tests/$f.py"
+            echo "::endgroup::"
+          done

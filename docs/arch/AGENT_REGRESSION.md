@@ -124,10 +124,10 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Assert:** Erster grep liefert KEINE Treffer (kein `partner._following`/`partner._on_partner_repair` mehr — Peers nur über `partner.links.*`). Der einzige verbleibende `_following`-Bezug in core/engine.py ist `self._following` (Z. 538, eigene Property im `_evaluate`) bzw. die Delegator-Property selbst (Z. 474/476 als `self.links.following`) — kein Fremdzugriff. Zweiter grep zeigt die public `partner.links.*`-Aufrufe (Z. 105/120/137).
   - **Cleanup:** —
 
-- [ ] **M1.3 — Alle vier Suiten grün (90) = Verhalten unverändert** · `P0`
+- [ ] **M1.3 — Alle vier Suiten grün (91) = Verhalten unverändert** · `P0`
   - **Prüft:** Die Extraktion ist verhaltenserhaltend — die vollständige In-Process-Suite bleibt grün.
   - **Treiber:** `cd <ha-core> && for t in units poe engine integration; do PYTHONPATH=<ha-core>:<ha-core>/config python tests/test_$t.py 2>&1 | tail -1; done`
-  - **Assert:** Genau diese vier Schlusszeilen: `28 passed, 0 failed` · `16 passed, 0 failed` · `34 passed, 0 failed` · `12/12 checks passed` → Summe 90. Kein `failed`/`FAIL`.
+  - **Assert:** Genau diese vier Schlusszeilen: `29 passed, 0 failed` · `16 passed, 0 failed` · `34 passed, 0 failed` · `12/12 checks passed` → Summe 91. Kein `failed`/`FAIL`.
   - **Cleanup:** —
 
 - [ ] **M1.4 — Live-Smoke: Linking-Verhalten nach Extraktion unverändert** · `P2`
@@ -291,13 +291,13 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 ### Automatisiert statt manuell
 
-- [ ] **AUTO-1 — Automatisierte Suiten laufen grün (28/16/34/7)** · `P0`
+- [ ] **AUTO-1 — Automatisierte Suiten laufen grün (29/16/34/7)** · `P0`
   - **Prüft:** Die vier Real-HA-core-Suiten (`tests.common.async_test_home_assistant`) sind grün und decken PoE resolve/cycle/coalescing/Platzhalter, Engine-State-Machine + Persistenz, Health-Registry-Events inkl. Template-Blind-Erkennung (B3), Linking-Koordination ab.
-  - **Files:** `tests/test_units.py` (28), `test_poe.py` (16), `test_engine.py` (34), `test_integration.py` (7 Test-Funktionen / 12 `ok(...)`-Checks). Health-Tests u. a. `test_health_self_reference_warns`, `test_health_template_all_missing_is_blind`, `test_health_template_partial_missing_warns_only`. Linking-Tests u. a. `test_engine.py::test_linked_follower_recovers_with_leader`, `test_linked_follower_escalates_when_leader_fails`, `test_linked_auto_off_follower_escalates`, `test_leader_stop_does_not_escalate_follower`, `test_debounce_arbitration_second_follows`.
+  - **Files:** `tests/test_units.py` (29), `test_poe.py` (16), `test_engine.py` (34), `test_integration.py` (7 Test-Funktionen / 12 `ok(...)`-Checks). Health-Tests u. a. `test_health_self_reference_warns`, `test_health_template_all_missing_is_blind`, `test_health_template_partial_missing_warns_only`. Linking-Tests u. a. `test_engine.py::test_linked_follower_recovers_with_leader`, `test_linked_follower_escalates_when_leader_fails`, `test_linked_auto_off_follower_escalates`, `test_leader_stop_does_not_escalate_follower`, `test_debounce_arbitration_second_follows`.
   - **Treiber:** Aus `<ha-core>`: `PYTHONPATH=<ha-core>:<ha-core>/config python -m pytest tests -q` (in-process, kein laufender Server nötig).
-  - **Assert:** `test_units` 28, `test_poe` 16, `test_engine` 34 passed; `test_integration` grün (7 Test-Funktionen → `12/12 checks passed`). Gesamt **kein** FAIL/ERROR.
+  - **Assert:** `test_units` 29, `test_poe` 16, `test_engine` 34 passed; `test_integration` grün (7 Test-Funktionen → `12/12 checks passed`). Gesamt **kein** FAIL/ERROR.
   - **Cleanup:** —
-  - *Hinweis: Doc-Zähler 18/16/30/„7" sind STALE → korrigiert auf 28/16/34/7.*
+  - *Hinweis: Doc-Zähler 18/16/30/„7" sind STALE → korrigiert auf 29/16/34/7.*
 
 - [ ] **AUTO-2 — Gates grün (ruff/format)** · `P1`
   - **Prüft:** Lint-/Format-Gates bestehen für das Necromancer-Paket.
@@ -887,8 +887,8 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 
 - [ ] **DOC-1 — Suite-Zählerstand im Regressions-Doc aktualisieren** · `P2`
   - **Prüft:** Der Header von REGRESSION.md nennt veraltete Testzahlen und veraltete „lock"-Formulierung.
-  - **Files:** REGRESSION.md Z. 13 („51 automatisierte Tests grün") + Z. 55 („test_units (18) · test_poe (15) · test_engine (10) · test_integration (8) = 51 grün") + Z. 56 (Wort „lock"). Aktuell: `test_units=28 · test_poe=16 · test_engine=34 · test_integration=12-checks (7 Funktionen)` → Summe 90; PoE-Per-Port-`Lock` wurde ENTFERNT → durch **Coalescing** (`_inflight`-Task + `asyncio.shield`) ersetzt → „lock/Platzhalter" auf „Coalescing/Platzhalter" umtexten.
-  - **Assert:** Header-Zeilen (Z. 13/55) auf die aktuellen Zahlen korrigiert (28/16/34/12-checks = 90); Z. 56 ersetzt „lock" durch „coalescing".
+  - **Files:** REGRESSION.md Z. 13 („51 automatisierte Tests grün") + Z. 55 („test_units (18) · test_poe (15) · test_engine (10) · test_integration (8) = 51 grün") + Z. 56 (Wort „lock"). Aktuell: `test_units=29 · test_poe=16 · test_engine=34 · test_integration=12-checks (7 Funktionen)` → Summe 91; PoE-Per-Port-`Lock` wurde ENTFERNT → durch **Coalescing** (`_inflight`-Task + `asyncio.shield`) ersetzt → „lock/Platzhalter" auf „Coalescing/Platzhalter" umtexten.
+  - **Assert:** Header-Zeilen (Z. 13/55) auf die aktuellen Zahlen korrigiert (29/16/34/12-checks = 91); Z. 56 ersetzt „lock" durch „coalescing".
   - **Cleanup:** —
 
 ---
@@ -1260,7 +1260,7 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Cleanup:** —
 
 - [ ] **GAP-SUITE — Aktuelle Suite-Zählungen stimmen (Doc-Drift gegen Code)** · `P2`
-  - **Prüft:** Die vier In-Process-Suiten melden die aktuellen Counts (units=28, poe=16, engine=34, integration=12-Checks); zusätzlich die pytest-Suite `tests/components/necromancer/` (72) via `pytest tests/components/necromancer/`.
+  - **Prüft:** Die vier In-Process-Suiten melden die aktuellen Counts (units=29, poe=16, engine=34, integration=12-Checks); zusätzlich die pytest-Suite `tests/components/necromancer/` (72) via `pytest tests/components/necromancer/`.
   - **Treiber:** je `python tests/test_units.py`, `…/test_poe.py`, `…/test_engine.py`, `…/test_integration.py` (aus `<ha-core>`, PYTHONPATH gesetzt); `<ha-venv>/bin/python -m pytest tests/components/necromancer/`.
-  - **Assert:** Schlusszeilen `28 passed`, `16 passed`, `34 passed`, `12/12 checks passed`, `72 passed` (jeweils 0 failed).
+  - **Assert:** Schlusszeilen `29 passed`, `16 passed`, `34 passed`, `12/12 checks passed`, `72 passed` (jeweils 0 failed).
   - **Cleanup:** —
