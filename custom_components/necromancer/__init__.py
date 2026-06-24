@@ -391,7 +391,7 @@ def _reconcile_devices(
 ) -> None:
     """Clean up our device registry footprint.
 
-    - Remove our standalone "Überwachtes Gerät" devices for subentries that are
+    - Remove our standalone "Necromancer guard monitored device" devices for subentries that are
       now linked to an existing device or no longer exist.
     - Detach us from any foreign device that is no longer a current link target
       (i.e. a device a subentry was unlinked from).

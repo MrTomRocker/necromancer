@@ -2,7 +2,7 @@
 
 > A heartbeat sensor keeps existing with a stale value when the flow behind it dies, so a plain state check never notices — watch *when it last wrote* instead.
 
-**Concepts shown:** template guard · freshness watchdog (`last_reported`) · history/timestamp access · notify-only (or run an action + health-check) · flow redeploy
+**Concepts shown:** template guard · freshness watchdog (`last_reported`) · history/timestamp access · notify-only (or run an action + Health Check) · flow redeploy
 **Use it for:** Node-RED flows, scrape / MQTT feeds, integration polls — any source that should keep updating.
 
 ## The problem
@@ -20,7 +20,7 @@ changes to something wrong, but when it stops arriving at all.
 
 ## The guard
 
-A template-based health source that asks "was this written recently?", paired with a
+A template-based Health Source that asks "was this written recently?", paired with a
 notify-only strategy.
 
 **Health (template-based):**
@@ -44,7 +44,7 @@ no recovery action to wait on.)
 
 The template renders `true` while the heartbeat has been *reported* within the last
 15 minutes, and `false` once it goes quiet. Necromancer evaluates it continuously
-(see [Health sources](../../README.md#health-sources)).
+(see [Health Sources](../../README.md#health-sources)).
 
 When it flips to `false`, the guard enters `suspect` and starts the **debounce**
 timer. If the heartbeat resumes within 120 s, it was a blip — the guard slides back to
@@ -72,7 +72,7 @@ cron script's output.
 ## Variation: auto-recover, don't just alert
 
 If you can restart the flow programmatically, swap notify-only for **Run an action
-with health-check**. Necromancer runs your repair action, then waits up to the
+with Health Check**. Necromancer runs your recovery action, then waits up to the
 **boot window** for the *same* freshness template to read `true` again before declaring
 success — so "fixed" means the heartbeat genuinely resumed, not just "the restart call
 returned 200".
@@ -90,11 +90,11 @@ rest_command:
     # add an Authorization header if your admin API is secured
 ```
 
-Then build the guard with the **same freshness template** as the health source, and
+Then build the guard with the **same freshness template** as the Health Source, and
 this recovery:
 
 ```yaml
-# Recovery: Run an action (with health-check)
+# Recovery: Run an action (with Health Check)
 - action: rest_command.nodered_redeploy
 ```
 

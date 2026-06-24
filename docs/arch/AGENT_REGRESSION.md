@@ -41,12 +41,21 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 > (`N._post_flow(fid,{...})`) dürfen `"mode"` NICHT mehr im Device-Step posten — sonst `extra keys not allowed
 > @ data['mode']`. Die Strategie-Wahl kommt erst im **nächsten** Step (`strategy`): `"notify"` (erste Option,
 > → Notify-Step) oder eine Recovery-Strategie (`switch`/`action`/`actions`/`poe_port` → eigener Step). Der
-> Health-Check ist kein Strategie-Variant mehr, sondern ein Toggle (`health_check`, default an) in der
+> Health Check ist kein Strategie-Variant mehr, sondern ein Toggle (`health_check`, default an) in der
 > Behaviour-Section. `N.create_guard({...,"mode":"recover"|"notify",...})` bleibt unverändert gültig — das
 > Testkit übersetzt `mode` in die Strategy-Wahl und akzeptiert das alte `*_check`-Kürzel weiter (→ Basis-
 > Strategie + `health_check: true`).
-> Ist im Device-Step ein `assigned_device` gesetzt, ist im Recover-Step zusätzlich die Section `"reload":{}`
-> **pflicht** (sonst `required key not provided`).
+> **Device-Step ist FLACH (section-los):** Die Felder `name`, `entity_id`, `attribute`, `on_value`,
+> `off_value` (state-based) bzw. `template` (template-based) sowie `device_id` liegen alle auf **Top-Level**
+> (Helper `_health_fields`, `_device_schema`). Es gibt **keine** Sections `state_check`/`template_check`/
+> `assigned_device` mehr (die Konstanten `SECTION_STATE`/`SECTION_TEMPLATE`/`SECTION_DEVICE` wurden entfernt).
+> Das Testkit (`create_guard`) postet aus Altgründen noch verschachtelt (`{"state_check":{...}}` etc.); der Flow
+> zieht das via `_flatten_sections` hoch, daher funktioniert es weiter — manuelle Treiber dürfen aber genauso gut
+> flach posten (`{"name":..., "entity_id":..., "on_value":[...], "off_value":[...]}` bzw.
+> `{"name":..., "template":"..."}`; `device_id` top-level).
+> Ist im Device-Step ein Gerät (`device_id`) gesetzt, ist im Recover-Step zusätzlich die Section `"reload":{}`
+> **pflicht** (sonst `required key not provided`). (Der Recover-Step behält seine Sections
+> `recovery_action`/`behavior`/`notification`/`linked_guards`/`reload` — nur der Device-Step ist flach.)
 
 ---
 
@@ -315,23 +324,23 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **HQ1 — Source-Step zeigt Radio state/template** · `P0`
   - **Prüft:** Der erste Schritt der Gerät-hinzufügen-Subentry bietet die Zustandsquelle als List-Radio `state_based`/`template_based`.
-  - **Files:** `config_flow_helpers/schemas.py` → `_source_schema` (Z. 201-213, `options=[SOURCE_STATE, SOURCE_TEMPLATE]`, `translation_key="source_type"`) · `const.py` Z. 50-51 (`SOURCE_STATE="state_based"`, `SOURCE_TEMPLATE="template_based"`).
+  - **Files:** `config_flow_helpers/schemas.py` → `_source_schema` (Z. 198-210, `options=[SOURCE_STATE, SOURCE_TEMPLATE]`, `translation_key="source_type"`) · `const.py` Z. 50-51 (`SOURCE_STATE="state_based"`, `SOURCE_TEMPLATE="template_based"`).
   - **Treiber:** Flow direkt starten (POST-only): `import requests; r=requests.post(N.BASE+"/api/config/config_entries/subentries/flow", headers=N.H, json={"handler":[N.hub_id(),"device"]}, timeout=15).json(); fid=r["flow_id"]`.
   - **Assert:** `r["step_id"]=="user"` und im `data_schema` hat das Feld `source_type` ein `select`-Selector mit options `["state_based","template_based"]`.
   - **Cleanup:** — (Flow nie abgeschlossen).
 
-- [ ] **HQ2 — state_based: Device-Step zeigt Section „state_check"** · `P0`
-  - **Prüft:** Bei `state_based` enthält der Device-Step die Section `state_check` mit Entität + Attribut + on/off-Werten, KEIN Template.
-  - **Files:** `config_flow_helpers/schemas.py` → `_health_section` (Z. 222-241), `_watch_fields` (Z. 126-141), `SECTION_STATE="state_check"` (Z. 148).
+- [ ] **HQ2 — state_based: Device-Step zeigt flache Health-Felder** · `P0`
+  - **Prüft:** Bei `state_based` enthält der Device-Step die flachen Felder `entity_id` + `attribute` + on/off-Werte (Top-Level, KEINE Section), KEIN Template.
+  - **Files:** `config_flow_helpers/schemas.py` → `_health_fields` (Z. 219-232), `_watch_fields` (Z. 126-141), `_device_schema` (Z. 235-249). (Es gibt KEIN `SECTION_STATE`/`state_check` mehr — die Felder sind flach.)
   - **Treiber:** Flow wie HQ1 starten (`fid=r["flow_id"]`), dann `r=requests.post(N.BASE+f"/api/config/config_entries/subentries/flow/{fid}", headers=N.H, json={"source_type":"state_based"}, timeout=15).json()`.
-  - **Assert:** `r["step_id"]=="device"`; `data_schema` enthält ein Feld `state_check` (section) mit Sub-Feldern `entity_id`,`on_value`,`off_value`; kein `template_check`/`template`.
+  - **Assert:** `r["step_id"]=="device"`; `data_schema` enthält auf Top-Level die Felder `name`,`entity_id`,`on_value`,`off_value`,`device_id` (kein `state_check`-Wrapper, kein `template`).
   - **Cleanup:** —
 
-- [ ] **HQ3 — template_based: Device-Step zeigt Section „template_check"** · `P0`
-  - **Prüft:** Bei `template_based` enthält der Device-Step die Section `template_check` (TemplateSelector), KEINE Entität/on-off.
-  - **Files:** `config_flow_helpers/schemas.py` → `_health_section` Z. 224-232 (`SECTION_TEMPLATE`, `TemplateSelector()`), `SECTION_TEMPLATE="template_check"` (Z. 149).
+- [ ] **HQ3 — template_based: Device-Step zeigt flaches Template-Feld** · `P0`
+  - **Prüft:** Bei `template_based` enthält der Device-Step das flache Feld `template` (TemplateSelector, Top-Level, KEINE Section), KEINE Entität/on-off.
+  - **Files:** `config_flow_helpers/schemas.py` → `_health_fields` Z. 219-226 (Template-Zweig, `TemplateSelector()`), `_device_schema` (Z. 235-249). (Es gibt KEIN `SECTION_TEMPLATE`/`template_check` mehr.)
   - **Treiber:** Flow wie HQ1 starten (`fid=r["flow_id"]`), dann `r=requests.post(N.BASE+f"/api/config/config_entries/subentries/flow/{fid}", headers=N.H, json={"source_type":"template_based"}, timeout=15).json()`.
-  - **Assert:** `r["step_id"]=="device"`; `data_schema` enthält `template_check` mit Sub-Feld `template` (selector `template`); kein `state_check`/`entity_id`.
+  - **Assert:** `r["step_id"]=="device"`; `data_schema` enthält auf Top-Level das Feld `template` (selector `template`); kein `state_check`-Wrapper, kein `entity_id`.
   - **Cleanup:** —
 
 - [ ] **HQ4 — state_based end-to-end: Guard reagiert auf Health-Entity** · `P0`
@@ -356,8 +365,8 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Cleanup:** `N.delete_subentry(eid,sub)`; `N.setstate("input_boolean.test_5","off")`.
 
 - [ ] **HQ6 — Template-Verdicts: kein Fehlalarm bei unklarem Ergebnis** · `P0`
-  - **Prüft:** `result_as_boolean` + UNKNOWN-Set: `{{ true }}`→OK · `{{ false }}`→UNHEALTHY · `{{ states('sensor.does_not_exist') }}`/leer/`none`→UNKNOWN (kein SUSPECT).
-  - **Files:** `core/health/template.py` → `evaluate` Z. 50-60, `_UNKNOWN_RESULTS={"","none","unknown","unavailable"}` (Z. 27).
+  - **Prüft:** Whitelist: `{{ true }}`/`on`/`1`/`yes`→OK · `{{ false }}`/`off`/`0`/`no`→UNHEALTHY · alles andere (`{{ 'kaputt' }}`, `unavailable`, leer, `none`, `{{ states('sensor.does_not_exist') }}`, Render-Fehler)→UNKNOWN (kein SUSPECT, keine Recovery).
+  - **Files:** `core/health/template.py` → `evaluate` Z. 53-70 (Whitelist: `_HEALTHY_RESULTS={"true","on","1","yes"}` Z. 29 → OK, `_FAULTY_RESULTS={"false","off","0","no"}` Z. 30 → UNHEALTHY, `TemplateError`/alles übrige → UNKNOWN). Es gibt KEIN `_UNKNOWN_RESULTS`-Set und KEIN `result_as_boolean` mehr.
   - **Treiber:** Drei kurzlebige notify-Guards anlegen (`mode="notify"`, `behavior={"debounce":2}`): a) `health.template="{{ true }}"`, b) `"{{ false }}"`, c) `"{{ states('sensor.does_not_exist') }}"`. Nach Anlegen je `N.wait(1)`.
   - **Assert:** a) `N.guard(slug)[0]=="ok"`; b) nach `N.wait(3)` Log `"<name> problem detected (notify-only)"`; c) bleibt `ok` (UNKNOWN ⇒ KEIN `"problem detected"` für c im Log).
   - **Cleanup:** alle drei `N.delete_subentry(eid,sub)`.
@@ -371,9 +380,9 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **HQ7 — Kaputtes Jinja im Flow abgelehnt** · `P0`
   - **Prüft:** Ungültiges Template (`{{ 1 + }}`) wird vom TemplateSelector validiert → Flow-Error, kein Submit.
-  - **Files:** `config_flow_helpers/schemas.py` → `_health_section` Z. 228-230 (`selector.TemplateSelector()` validiert serverseitig).
-  - **Treiber:** Flow starten (`fid=r["flow_id"]`), `{"source_type":"template_based"}`, dann device-Step posten mit `{"name":"HQbad","assigned_device":{},"template_check":{"template":"{{ 1 + }}"}}` (kein `mode`-Feld im Device-Step — die Strategie-Wahl inkl. `notify` kommt erst im nächsten Step).
-  - **Assert:** Antwort hat `errors` (z. B. `{"template_check":...}` oder `base`) bzw. `type!="create_entry"` und bleibt `step_id=="device"`.
+  - **Files:** `config_flow_helpers/schemas.py` → `_health_fields` Z. 221-226 (`selector.TemplateSelector()` validiert serverseitig).
+  - **Treiber:** Flow starten (`fid=r["flow_id"]`), `{"source_type":"template_based"}`, dann device-Step FLACH posten mit `{"name":"HQbad","template":"{{ 1 + }}"}` (kein `mode`-Feld im Device-Step — die Strategie-Wahl inkl. `notify` kommt erst im nächsten Step).
+  - **Assert:** Antwort hat `errors` (z. B. `{"template":...}` oder `base`) bzw. `type!="create_entry"` und bleibt `step_id=="device"`.
   - **Cleanup:** — (kein Subentry erzeugt).
 
 - [ ] **HQ8 — F2: Template referenziert eigene Entity → Feedback-Loop-WARNING** · `P1`
@@ -388,7 +397,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **ST1 — Strategie-Radio zeigt genau 5 (notify + 4), kein Mode-Feld im Device-Step** · `P0`
   - **Prüft:** Das Mode-Feld (Auto-Reparatur/Nur-benachrichtigen) ist aus dem Device-Step **entfernt**; die Wahl liegt jetzt als erste Option (`notify`) im Strategie-Step, gefolgt von den 4 Recovery-Strategien. Der Health-Check ist ein Toggle (`health_check`, default an) in jeder Recovery-Behaviour-Section.
   - **Files:** `config_flow_helpers/schemas.py` → `_device_schema` (kein `CONF_MODE` mehr), `_strategy_schema` (`options=[MODE_NOTIFY, *_STRATEGIES]`), `_build_data` (`notify_only = strategy == MODE_NOTIFY`); `config_flow.py` → `async_step_strategy`-Dispatch (`MODE_NOTIFY: async_step_notify`).
-  - **Treiber:** Flow starten (`fid=r["flow_id"]`) → `{"source_type":"state_based"}` → device-Step posten mit `{"name":"STseven","assigned_device":{},"state_check":{"entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]}}` (KEIN `mode`).
+  - **Treiber:** Flow starten (`fid=r["flow_id"]`) → `{"source_type":"state_based"}` → device-Step FLACH posten mit `{"name":"STseven","entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]}` (KEIN `mode`).
   - **Assert:** Device-Step-Schema hat **kein** `mode`-Feld; `r["step_id"]=="strategy"`; das `strategy`-select hat options `["notify","switch","action","actions","poe_port"]` (5 Einträge, genau diese Reihenfolge). `notify` wählen → `step_id=="notify"`.
   - **Cleanup:** — (Flow nicht abgeschlossen).
 
@@ -544,14 +553,14 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **CC1 — Kaputtes Jinja im Health-Template wird abgelehnt** · `P0`
   - **Prüft:** Ein syntaktisch defektes Template (`{{ 1 + }}`, unclosed) wird vom `TemplateSelector` validiert und der Device-Step lehnt ab (kein `create_entry`).
-  - **Files:** `config_flow_helpers/schemas.py:222` `_health_section` (SOURCE_TEMPLATE) nutzt `selector.TemplateSelector()` (Zeile 230, serverseitige Validierung) in Section `template_check` (`SECTION_TEMPLATE`, Zeile 149).
-  - **Treiber:** Subentry-Flow manuell bis `device`-Step treiben und `template_check.template = "{{ 1 + }}"` posten (statt `N.create_guard`, das nur valide Templates kennt): `requests.post(.../subentries/flow, {"handler":[hub,"device"]})` → `_post_flow(fid,{"source_type":"template_based"})` → `_post_flow(fid,{"name":"BadJinja","assigned_device":{},"template_check":{"template":"{{ 1 + }}"}})` (kein `mode` im Device-Step).
-  - **Assert:** Antwort enthält `errors` (z. B. `errors["template_check"]`/`base`) bzw. bleibt `step_id=="device"`; KEIN `type=="create_entry"`.
+  - **Files:** `config_flow_helpers/schemas.py:219` `_health_fields` (SOURCE_TEMPLATE-Zweig) nutzt `selector.TemplateSelector()` (Zeile 225, serverseitige Validierung) für das flache Feld `template` (kein Section-Wrapper mehr).
+  - **Treiber:** Subentry-Flow manuell bis `device`-Step treiben und `template = "{{ 1 + }}"` FLACH posten (statt `N.create_guard`, das nur valide Templates kennt): `requests.post(.../subentries/flow, {"handler":[hub,"device"]})` → `_post_flow(fid,{"source_type":"template_based"})` → `_post_flow(fid,{"name":"BadJinja","template":"{{ 1 + }}"})` (kein `mode` im Device-Step).
+  - **Assert:** Antwort enthält `errors` (z. B. `errors["template"]`/`base`) bzw. bleibt `step_id=="device"`; KEIN `type=="create_entry"`.
   - **Cleanup:** — (kein Subentry angelegt)
 
 - [ ] **CC2 — Template-Verdicts: UNKNOWN macht keinen Fehlalarm** · `P0`
-  - **Prüft:** `true`/`42`→OK · `false`/`'banana'`/`is_state→False`→UNHEALTHY · `states(missing)`/`none`/leer→UNKNOWN (kein Recover, kein SUSPECT).
-  - **Files:** `core/health/template.py:27` `_UNKNOWN_RESULTS={"","none","unknown","unavailable"}`; `evaluate()` (Zeile 50): `TemplateError`→UNKNOWN (Zeile 54), `None`/leer/none-String→UNKNOWN (Zeile 56–59), sonst `result_as_boolean` (Zeile 60).
+  - **Prüft:** Whitelist: `true`/`on`/`1`/`yes`→OK · `false`/`off`/`0`/`no`/`is_state→False`→UNHEALTHY · alles übrige (`'banana'`, `42`, `states(missing)`, `none`, leer, Render-Fehler)→UNKNOWN (kein Recover, kein SUSPECT).
+  - **Files:** `core/health/template.py:29-30` `_HEALTHY_RESULTS={"true","on","1","yes"}` / `_FAULTY_RESULTS={"false","off","0","no"}`; `evaluate()`: `TemplateError`→UNKNOWN, sonst `str(result).strip().lower()` gegen die zwei Sets, alles übrige→UNKNOWN.
   - **Treiber:** Guard `TplUnknown` mit `source_type:"template_based"`, `health:{template:"{{ states('sensor.does_not_exist') }}"}`, `strategy:"switch"`, `switch_entity:"switch.test_template_switch"`, `behavior:{debounce:5, cooldown:5}`. `N.wait(8)` → `N.guard("tplunknown")`.
   - **Assert:** `N.guard("tplunknown")[0] == "ok"` (UNKNOWN bleibt OK, kein `suspect`); `binary_sensor.tplunknown_gesundheit` ist NICHT `off`. Gegenprobe: Reconfigure auf `{{ false }}` → nach Debounce `suspect`/`escalated`.
   - **Cleanup:** `N.delete_subentry(entry, sub)`
@@ -634,15 +643,15 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **SF1 — Sektionen serverseitig ausgeklappt** · `P1`
   - **Prüft:** Nicht-collapsed Sektionen melden dem Frontend `expanded:true` (Default `collapsed=False`); nur `linked_guards` ist collapsed.
   - **Files:** `config_flow_helpers/schemas.py` → `_section` (Z.162-164): `section(vol.Schema(fields), {"collapsed": collapsed})` mit `collapsed: bool = False`; `_link_section` (Z.298-325) ist die EINZIGE Sektion mit `collapsed=True`. Serverseitige Übersetzung in `homeassistant/helpers/config_validation.py` Z.1189-1197: Section → `{"type":"expandable","expanded": not collapsed}`.
-  - **Treiber:** Flow bis Step `switch` treiben (testkit-intern): `hub=N.hub_id()`; `r=N._post_flow`-Kette ist nur in `create_guard` gekapselt — hier manuell: POST `/api/config/config_entries/subentries/flow` mit `{"handler":[hub,"device"]}` → `fid`; `N._post_flow(fid,{"source_type":"state_based"})` (→ `device`); `N._post_flow(fid,{"name":"SecX","assigned_device":{},"state_check":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]}})` (→ `strategy`; kein `mode`-Feld); `N._post_flow(fid,{"strategy":"switch"})` (→ `switch`). Im zurückgegebenen `data_schema` die Felder mit `name=="behavior"` / `name=="notification"` suchen.
+  - **Treiber:** Flow bis Step `switch` treiben (testkit-intern): `hub=N.hub_id()`; `r=N._post_flow`-Kette ist nur in `create_guard` gekapselt — hier manuell: POST `/api/config/config_entries/subentries/flow` mit `{"handler":[hub,"device"]}` → `fid`; `N._post_flow(fid,{"source_type":"state_based"})` (→ `device`); `N._post_flow(fid,{"name":"SecX","entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]})` (→ `strategy`; Device-Step flach, kein `mode`-Feld); `N._post_flow(fid,{"strategy":"switch"})` (→ `switch`). Im zurückgegebenen `data_schema` die Felder mit `name=="behavior"` / `name=="notification"` suchen.
   - **Assert:** Im `switch`-Schema hat das Feld `behavior` `"type":"expandable"` und `"expanded": true`; das Feld `notification` ebenfalls `"expanded": true`; ein evtl. vorhandenes `linked_guards`-Feld (nur wenn ein ANDERER Recover-Guard existiert) trägt `"expanded": false`.
   - **Cleanup:** Flow ohne Save verwerfen: `requests.delete(f"http://localhost:8123/api/config/config_entries/subentries/flow/{fid}",headers=N.H)`.
 
 - [ ] **SF2 — _flatten_sections hebt verschachtelte Werte hoch (Device-Create)** · `P1`
-  - **Prüft:** Submit-Form `{section:{feld:…}}` wird vor Verwendung flachgezogen, sodass der Guard real entsteht (Health- + Switch-Sektion verarbeitet).
-  - **Files:** `config_flow_helpers/schemas.py` → `_flatten_sections` (Z.167-175) `out.update(value)` für jedes dict; aufgerufen in `config_flow.py` `async_step_device` (Z.269) und `async_step_add_port` (Z.513) sowie in `config_flow_helpers/schemas.py` `_build_data` (Z.506-507).
-  - **Treiber:** `hub,sub=N.create_guard({"source_type":"state_based","name":"FlatDev","health":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"switch","switch_entity":"switch.test_template_switch","behavior":{"debounce":5,"cooldown":5}})` — `create_guard` schickt `state_check` UND `assigned_device` als verschachtelte Sektionen, die Switch-Step-Sektionen `behavior`/`notification` ebenso.
-  - **Assert:** `N.st("sensor.flatdev_status")` ist nicht `None` (Guard entstand → Sektionen wurden geflattet/verarbeitet). Der Switch-Wert kam aus der `power`-losen Flat-Form: `N.guard("flatdev")[1]["target"] == "switch.test_template_switch"` (Status-Sensor-Attr `target`=`driver.target_info()`). Health beobachtbar: `N.setstate("binary_sensor.test_reachable","off")`; `N.wait(1)`; `N.st("binary_sensor.flatdev_gesundheit")["state"]=="off"`. (Es gibt **kein** `health`-Attribut am Status-Sensor — Attrs sind nur `attempt/recover_count/last_recover/last_seen/target/auto_restart`.)
+  - **Prüft:** Submit-Form `{section:{feld:…}}` wird vor Verwendung flachgezogen, sodass der Guard real entsteht (Recover-Step-Sektionen + die noch verschachtelt postenden Testkit-Device-Keys verarbeitet).
+  - **Files:** `config_flow_helpers/schemas.py` → `_flatten_sections` (Z.164-172) `out.update(value)` für jedes dict; aufgerufen in `config_flow.py` `async_step_device` (Z.270) und `async_step_add_port` (Z.515) sowie in `config_flow_helpers/schemas.py` `_build_data` (Z.492-493).
+  - **Treiber:** `hub,sub=N.create_guard({"source_type":"state_based","name":"FlatDev","health":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"switch","switch_entity":"switch.test_template_switch","behavior":{"debounce":5,"cooldown":5}})` — der Device-Step ist FLACH, aber das Testkit postet aus Altgründen noch verschachtelt (`state_check`/`assigned_device`), was `_flatten_sections` hochzieht; die Switch-Step-Sektionen `behavior`/`notification` werden ebenso geflattet.
+  - **Assert:** `N.st("sensor.flatdev_status")` ist nicht `None` (Guard entstand → verschachtelte Werte wurden geflattet/verarbeitet). Der Switch-Wert kam aus der `power`-losen Flat-Form: `N.guard("flatdev")[1]["target"] == "switch.test_template_switch"` (Status-Sensor-Attr `target`=`driver.target_info()`). Health beobachtbar: `N.setstate("binary_sensor.test_reachable","off")`; `N.wait(1)`; `N.st("binary_sensor.flatdev_gesundheit")["state"]=="off"`. (Es gibt **kein** `health`-Attribut am Status-Sensor — Attrs sind nur `attempt/recover_count/last_recover/last_seen/target/auto_restart`.)
   - **Cleanup:** `N.delete_subentry(hub,sub)`; `N.setstate("binary_sensor.test_reachable","on")`.
 
 - [ ] **SF3 — _flatten_sections beim Port-Add (Options-Flow)** · `P1`
@@ -657,7 +666,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **EX1 — Health-Picker: nur EIGENE Guard-Entities ausgeschlossen, fremde wählbar** · `P1`
   - **Prüft:** Im Health-Entity-Selektor sind nur die Entities **des gerade bearbeiteten** Guards ausgeschlossen (kein Self-Loop). Entities **anderer** Guards bleiben wählbar → **Supervisor-/Staged-Guards**. Beim Neuanlegen (noch keine subentry_id) wird necromancer-seitig nichts ausgeschlossen.
   - **Files:** `config_flow_helpers/schemas.py` → `_own_guard_entities(hass, subentry_id)` (filtert `platform==DOMAIN AND unique_id.startswith(subentry_id)`; `[]` ohne id); im Health-Picker via `async_step_device` `exclude=_own_guard_entities(self.hass, self._own_subentry_id())`. (Switch/Port nutzen weiter `_own_entities` = ALLE necromancer-Entities, siehe EX2.) Automatisiert: `test_units.py::test_own_guard_entities_only_self`.
-  - **Treiber:** Zwei Guards „A"/„B" anlegen; Guard A **reconfigure**n, Device-Step-Schema holen, `state_check.entity_id.selector.entity.exclude_entities` lesen.
+  - **Treiber:** Zwei Guards „A"/„B" anlegen; Guard A **reconfigure**n, Device-Step-Schema holen, das flache Feld `entity_id` → `selector.entity.exclude_entities` lesen (Top-Level, kein `state_check`-Wrapper mehr).
   - **Assert:** Enthält `sensor.a_status` (eigene), aber **NICHT** `sensor.b_status` (fremde → wählbar).
   - **Cleanup:** Flow verwerfen; Guards löschen.
 
@@ -904,16 +913,16 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 > `config/configuration.yaml`). Bei abweichender Log-Stufe sind die Marker nicht sichtbar.
 
 - [ ] **DLN1 — Verknüpfen hängt 4 Entities ans Zielgerät** · `P0`
-  - **Prüft:** Ein Guard mit `assigned_device` erzeugt KEIN eigenes „Überwachtes Gerät", sondern hängt seine 4 Entities unter dem Subentry an das gewählte Zielgerät; dessen Name bleibt unangetastet.
-  - **Files:** `__init__.py` → `_reconcile_devices` (Zeile 387–428: `standalone`/`linked_targets`-Split Zeile 400–403, stale-device-Remove `"Removing stale guard device %s"` Zeile 409); `config_flow_helpers/schemas.py` → `_device_schema` Zeile 244–263 (Section `SECTION_DEVICE="assigned_device"`, Feld `CONF_DEVICE_ID="device_id"`).
-  - **Treiber:** Ziel-Device-id (`<tgt>`) aus `N.ws([{"type":"config/device_registry/list"}])` (irgendein Nicht-Necromancer-Gerät) holen. `N.create_guard` setzt `assigned_device={}` hart → ein verlinkter Guard ist NICHT direkt über `create_guard` baubar; stattdessen Subentry-Flow manuell treiben: `N._post_flow(fid,{"source_type":"state_based"})` → Device-Step mit `{"name":"LinkTgtX","assigned_device":{"device_id":<tgt>},"state_check":{...}}` posten (kein `mode`-Feld) → `N._post_flow(fid,{"strategy":"action_check"})` → Recover-Step **inkl. `"reload":{}`** posten (bei zugewiesenem Gerät ist die Reload-Section pflicht: `{"action":[...],"behavior":{...},"notification":{},"linked_guards":{},"reload":{}}`). Nach Reload (`POST .../entry/<hub>/reload`) Entity-Registry via WS lesen, nach `config_subentry_id==<sid>` filtern.
+  - **Prüft:** Ein Guard mit zugewiesenem Gerät (`device_id`) erzeugt KEIN eigenes Standalone-Gerät, sondern hängt seine 4 Entities unter dem Subentry an das gewählte Zielgerät; dessen Name bleibt unangetastet.
+  - **Files:** `__init__.py` → `_reconcile_devices` (Zeile 387–428: `standalone`/`linked_targets`-Split Zeile 400–403, stale-device-Remove `"Removing stale guard device %s"` Zeile 409); `config_flow_helpers/schemas.py` → `_device_schema` Zeile 235–249 (flaches Feld `CONF_DEVICE_ID="device_id"` als `DeviceSelector()`, KEINE Section `assigned_device` mehr).
+  - **Treiber:** Ziel-Device-id (`<tgt>`) aus `N.ws([{"type":"config/device_registry/list"}])` (irgendein Nicht-Necromancer-Gerät) holen. `N.create_guard` setzt kein Gerät → ein verlinkter Guard ist NICHT direkt über `create_guard` baubar; stattdessen Subentry-Flow manuell treiben: `N._post_flow(fid,{"source_type":"state_based"})` → Device-Step FLACH mit `{"name":"LinkTgtX","device_id":<tgt>,"entity_id":...,"on_value":[...],"off_value":[...]}` posten (kein `mode`-Feld, `device_id` top-level) → `N._post_flow(fid,{"strategy":"action_check"})` → Recover-Step **inkl. `"reload":{}`** posten (bei zugewiesenem Gerät ist die Reload-Section pflicht: `{"action":[...],"behavior":{...},"notification":{},"linked_guards":{},"reload":{}}`). Nach Reload (`POST .../entry/<hub>/reload`) Entity-Registry via WS lesen, nach `config_subentry_id==<sid>` filtern.
   - **Assert:** Zielgerät-Name unverändert; ≥4 Entities mit `config_subentry_id==<sid>`, **alle** mit `device_id==<tgt>`; eine davon ist der Status-Sensor (`*_status`). **Hinweis:** Bei Geräte-Link übernehmen die View-Entities den **Zielgeräte-Namen** (z. B. `sensor.<zielgerät>_status`), NICHT den Guard-Namen — also nicht auf `sensor.linktgtx_status` prüfen, sondern über `config_subentry_id` filtern. KEIN zusätzliches Device mit identifier `(necromancer,<sid>)` im Registry; bei vorher existierendem Standalone erscheint `"Removing stale guard device"` in `N.log()`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
 - [ ] **DLN2 — Auflösen setzt Device-Namen auf Guard-Namen (kein name_by_user-Override)** · `P0`
   - **Prüft:** Reconfigure von „Gerät zugewiesen" → „kein Gerät" flaggt `name_reset`; nach Reload trägt das wiederhergestellte Standalone-Device den Guard-Namen, `name_by_user=None`.
   - **Files:** `config_flow.py` → `_finish` (Zeile 444; `name_reset`-Set nur auf der Unlink-Transition Zeile 452–454); `__init__.py` → `_reconcile_devices` (Zeile 420–428: `dev_reg.async_update_device(..., name=engine.name, name_by_user=None)` Zeile 427).
-  - **Treiber:** Guard mit `assigned_device` anlegen (s. DLN1), dann Reconfigure-Flow ohne `assigned_device` durchlaufen. `N.wait(3)`; `N.log()`.
+  - **Treiber:** Guard mit zugewiesenem Gerät anlegen (s. DLN1), dann Reconfigure-Flow ohne Gerät (`device_id` leer) durchlaufen. `N.wait(3)`; `N.log()`.
   - **Assert:** `N.log()` enthält `"Resetting device name to <name> after unlink"` (DEBUG, exakt: `"Resetting device name to %s after unlink"`); im `device_registry/list` hat das `(necromancer,<sid>)`-Device `name_by_user==None` und `name==<guard-name>`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
@@ -925,16 +934,16 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
 - [ ] **DLN4 — Self-/Cross-Link blockiert (`no_self_link`)** · `P0`
-  - **Prüft:** Ein Necromancer-eigenes Gerät kann nicht als `assigned_device` gewählt werden — Device-Step lehnt mit `no_self_link` ab.
-  - **Files:** `config_flow.py` → `_is_own_device` (Zeile 151–156) + `async_step_device` Zeile 271–272 (`errors[CONF_DEVICE_ID]="no_self_link"`); de.json `config_subentries.device.error.no_self_link`.
-  - **Treiber:** Eigenes Guard-Device-id aus `device_registry/list` (identifier-domain `necromancer`) holen, Subentry-Flow bis Device-Step treiben und Device-Step mit `{"name":"SelfX","assigned_device":{"device_id":<own_id>},"state_check":{...}}` posten (kein `mode`-Feld; der `no_self_link`-Fehler greift bereits im Device-Step, der Strategy-Step wird nie erreicht).
+  - **Prüft:** Ein Necromancer-eigenes Gerät kann nicht als zugewiesenes Gerät (`device_id`) gewählt werden — Device-Step lehnt mit `no_self_link` ab.
+  - **Files:** `config_flow.py` → `_is_own_device` (Zeile 152–156) + `async_step_device` Zeile 272–273 (`errors[CONF_DEVICE_ID]="no_self_link"`); de.json `config_subentries.device.error.no_self_link`.
+  - **Treiber:** Eigenes Guard-Device-id aus `device_registry/list` (identifier-domain `necromancer`) holen, Subentry-Flow bis Device-Step treiben und Device-Step FLACH mit `{"name":"SelfX","device_id":<own_id>,"entity_id":...,"on_value":[...],"off_value":[...]}` posten (kein `mode`-Feld, `device_id` top-level; der `no_self_link`-Fehler greift bereits im Device-Step, der Strategy-Step wird nie erreicht).
   - **Assert:** Antwort `step_id=="device"` mit `errors=={"device_id":"no_self_link"}` (kein `create_entry`).
   - **Cleanup:** Flow nicht abgeschlossen → „—"
 
 - [ ] **DLN5 — device.id stabil über Link→Unlink→Rename** · `P1`
   - **Prüft:** Die Subentry-/Device-Identität `(necromancer,<sid>)` bleibt dieselbe über Link, Unlink und Rename hinweg (kein neues Device-Objekt).
   - **Files:** `__init__.py` → `_reconcile_devices` (identifier `(DOMAIN, subentry_id)` bleibt Schlüssel; Device wird per `dev_reg.async_get_device(identifiers={(DOMAIN, subentry_id)})` gefunden, Zeile 424).
-  - **Treiber:** Standalone-Guard anlegen → `<sid>` merken. Reconfigure mit `assigned_device` → reload. Reconfigure ohne → reload. Reconfigure Rename → reload. Jeweils `device_registry/list` nach `(necromancer,<sid>)` filtern.
+  - **Treiber:** Standalone-Guard anlegen → `<sid>` merken. Reconfigure mit zugewiesenem Gerät → reload. Reconfigure ohne → reload. Reconfigure Rename → reload. Jeweils `device_registry/list` nach `(necromancer,<sid>)` filtern.
   - **Assert:** `<sid>` (Subentry-id) identisch über alle Schritte; das Standalone-Device nach dem finalen Unlink trägt wieder denselben identifier `(necromancer,<sid>)`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
@@ -1039,10 +1048,10 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Cleanup:** `N.delete_subentry(eid,sid)`
 
 - [ ] **CF4 — Reconfigure Source-Wechsel state↔template** · `P1`
-  - **Prüft:** Source-Step-Default folgt `_source_type_of`; nach Wechsel zeigt der Device-Step die passende Section (`state_check` ↔ `template_check`) und speichert die neue Source.
-  - **Files:** `config_flow.py` → `_source` Zeile 248–260 (`default=_source_type_of(...)`), `async_step_device` Zeile 287–289 (`source_type=self._source_type`).
+  - **Prüft:** Source-Step-Default folgt `_source_type_of`; nach Wechsel zeigt der Device-Step die passenden flachen Felder (state: `entity_id`/`on_value`/`off_value` ↔ template: `template`) und speichert die neue Source.
+  - **Files:** `config_flow.py` → `_source` Zeile 249–261 (`default=_source_type_of(...)`), `async_step_device` Zeile 288–290 (`source_type=self._source_type` an `_device_schema`).
   - **Treiber:** state-Guard `eid,sid=N.create_guard({...,"name":"CFSrc",...})` anlegen. Reconfigure: Source-Step mit `{"source_type":"template_based"}` posten → Device-Step-Schema prüfen. Template `{{ is_state('input_boolean.test_5','on') }}` setzen, abschließen, reload.
-  - **Assert:** Reconfigure-Source-Step Default initial `state_based`; nach `template_based`-Submit hat das Device-Step-Schema die `template_check`-Section (kein `state_check`); nach Abschluss `_source_type_of(subentry.data)=="template_based"`.
+  - **Assert:** Reconfigure-Source-Step Default initial `state_based`; nach `template_based`-Submit hat das Device-Step-Schema das flache Feld `template` (kein `entity_id`/`on_value`); nach Abschluss `_source_type_of(subentry.data)=="template_based"`.
   - **Cleanup:** `N.delete_subentry(eid,sid)`
 
 - [ ] **CF5 — F1 Doppelter Guard-Name beim Submit abgelehnt** · `P1`
@@ -1096,7 +1105,8 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 ## Operator-Services & Recovery-Event
 
 > Primär **automatisiert** abgedeckt: `tests/suite/test_services.py` (8) +
-> `tests/suite/test_event.py` (4). Hier die Live-Smoke-Treiber (de-Slugs beachten —
+> `tests/suite/test_event.py` (4) + `tests/suite/test_health_primitives.py` (7, die
+> Response-Services). Hier die Live-Smoke-Treiber (de-Slugs beachten —
 > Status-Sensor `sensor.<slug>_status`, Event `event.<slug>_wiederbelebung`).
 
 - [ ] **SVC-1 — `reset` löscht ESCALATED** · `P1`
@@ -1111,6 +1121,11 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Prüft:** Domain-Service (kein Target) snoozt/entsnoozt **alle** Guards; busy-Guards übersprungen (WARNING `snooze_all: skipped … busy`).
   - **Treiber:** `N.call("necromancer","snooze_all",duration={"minutes":30})`; alle Status `snoozed`. `unsnooze_all` → alle zurück.
   - **Assert:** alle `snoozed`/zurück; pytest `test_snooze_all_*`.
+- [ ] **SVC-4 — Response-Services `check_health`/`wait_for_health`** · `P1`
+  - **Prüft:** `necromancer.check_health` liefert (response-only) den aktuellen Health State des Guards (`{"health": ...}` via `engine.current_health()`); `necromancer.wait_for_health` wartet bis Health=OK oder Timeout und liefert `{"health", "timed_out", "waited_s"}` (eigener Waiter, nicht das VERIFY-Event). `wait_for_health` re-nutzt den Health Check des Guards; `check_first` (default an) prüft sofort, ohne Default-Timeout greift `boot_window`.
+  - **Files:** `__init__.py` → `_check_health` Z. 241-243 (`SupportsResponse.ONLY` Z. 262), `_wait_for_health` Z. 245-255 (`SupportsResponse.ONLY` Z. 275); `core/engine.py` → `current_health` Z. 791, `async_service_wait_health` Z. 795; `services.yaml` `check_health`/`wait_for_health`.
+  - **Treiber:** `N.call("necromancer","check_health",entity_id="sensor.<slug>_status",return_response=True)`; Health brechen + heilbares `*_check`-Guard → `N.call("necromancer","wait_for_health",entity_id="sensor.<slug>_status",timeout=30,return_response=True)`.
+  - **Assert:** `check_health`-Response `health` in `("ok","unhealthy","unknown")`; `wait_for_health`-Response hat `health`/`timed_out`/`waited_s`; pytest `test_check_health_returns_verdict`, `test_wait_for_health_already_ok_returns_at_once`, `test_wait_for_health_heals_during_wait`, `test_wait_for_health_timeout_defaults_to_boot_window`.
 - [ ] **EVT-1 — Recovery-Event** · `P1`
   - **Prüft:** `event.<slug>_…` feuert `recovered` (Erfolg), `escalated` (Aufgabe nach max_attempts), `blocked` (Pre-Flight, Ziel fehlt). Nur Recover-Guards; notify-only hat keins.
   - **Treiber:** Erfolg / Eskalation / Block provozieren; `N.st("event.<slug>_…")["attributes"]["event_type"]`.

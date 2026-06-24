@@ -13,9 +13,9 @@ shipped values from `const.py`; all of them are per-guard configurable in the wi
 | Parameter | Default | Scope | Where it bites | Meaning |
 |---|---|---|---|---|
 | `debounce` | **120 s** | per guard | `_enter_suspect` → `async_call_later` | How long a guard must stay unhealthy (`SUSPECT`) before recovery is allowed to start. Absorbs blips. |
-| `boot_window` | **180 s** | per guard (health-check on) | `VERIFY` → `_wait_health_ok` | How long to wait for health to read OK again after the recovery action before counting the attempt as failed. |
+| `boot_window` | **180 s** | per guard (Health Check on) | `VERIFY` → `_wait_health_ok` | How long to wait for the Health State to read OK again after the recovery action before counting the attempt as failed. |
 | `cooldown` | **600 s** | per guard | `_recover_success` → `async_call_later` | Settle pause after a successful recovery before returning to `OK`. While cooling down a fresh fault re-enters `SUSPECT` directly. |
-| `max_attempts` | **2** | per guard (health-check on) | `_run_recovery_cycle` loop | How many recovery attempts before `ESCALATED`. Without a health-check there is exactly one attempt (fire-and-forget). |
+| `max_attempts` | **2** | per guard (Health Check on) | `_run_recovery_cycle` loop | How many recovery attempts before `ESCALATED`. With Health Check off there is exactly one attempt (fire-and-forget). |
 | `off_on_delay` | **5 s** | per guard (switch / actions / poe) | the cycle | Pause between *off* and *on* in a power-cycle. |
 | `reload_delay` | **10 s** | per guard (recover, only if a device is assigned + `reload_entry` on) | `_maybe_reload_device_entry`, after `recover()` and before VERIFY | Wait before reloading the assigned device's integration (config entry), so the just-repaired device has time to come up before HA reconnects. |
 | `off_timeout` | **20 s** | per **port** | `poe_port` / fabric `_await_status` | Max wait for the port's status entity to read *offline* after cutting power (staged verify). |
@@ -29,7 +29,7 @@ cooldown or attempts.
 
 ---
 
-## 2. The recovery clock (one full cycle, health-check on)
+## 2. The recovery clock (one full cycle, Health Check on)
 
 ```
 t0   health entity changes → _evaluate() → UNHEALTHY
@@ -44,7 +44,7 @@ t0+debounce   _debounce_done
        RECOVERING   attempt n/max
        │  driver.can_recover() → (False) → ESCALATED (recovery_blocked)
        │  driver.recover()      → raises  → failed attempt (retry/escalate)
-       │  no health-check?      → success now (assume it worked)
+       │  Health Check off?     → success now (assume it worked)
        ▼
        VERIFY   _wait_health_ok(boot_window)
        │  health OK within boot_window → success
@@ -71,7 +71,7 @@ is the **cooldown** (post-success), not a retry gap.
 | `OK` | healthy, or after cooldown | none | → `SUSPECT` on UNHEALTHY |
 | `SUSPECT` | OK→UNHEALTHY | **debounce** | → `OK` (recovered/blip) · → `ESCALATED` (auto off / policy) · → follow (partner) · → `RECOVERING` (start cycle) |
 | `RECOVERING` | cycle starts (or claimed) | none (driver runs) | → `VERIFY` (with check) · → `COOLDOWN` (no check) · → `ESCALATED` (blocked) |
-| `VERIFY` | after the action, health-check on | **boot_window** | → `COOLDOWN` (healthy) · → `RECOVERING` (retry) · → `ESCALATED` (out of attempts) |
+| `VERIFY` | after the action, Health Check on | **boot_window** | → `COOLDOWN` (healthy) · → `RECOVERING` (retry) · → `ESCALATED` (out of attempts) |
 | `COOLDOWN` | success | **cooldown** | → `OK` (healthy) · → `SUSPECT` (unhealthy) |
 | `ESCALATED` | gave up / blocked / auto-off | none | → `OK` automatically once health returns (clears the verdict) |
 | `SNOOZED` | operator `necromancer.snooze` / `snooze_all` | **remaining snooze duration** | → `OK` (auto-resume on elapse, re-derives from health) · → `OK` (`unsnooze` / `unsnooze_all`, early). Health is ignored while snoozed. |
@@ -161,8 +161,9 @@ Every distinct case the system handles. *(C = confirmed by a test/probe; L = see
 | entity value ∈ `off_value` | `UNHEALTHY`. |
 | `unavailable`/`unknown`, not listed in off | `UNKNOWN` → never triggers (no false alarm). C |
 | `unavailable` listed in `off_value` | treated as the fault that triggers recovery. |
-| template renders truthy / falsy | `OK` / `UNHEALTHY`. |
-| template render error / empty / `none` / `unknown` | `UNKNOWN` (no false alarm). C |
+| template renders `true`/`on`/`1`/`yes` | `OK`. |
+| template renders `false`/`off`/`0`/`no` | `UNHEALTHY`. |
+| template renders anything else (unrecognised text / blank / `none` / `unknown` / `unavailable`) or errors | `UNKNOWN` (whitelist only — no false alarm). C |
 | **disabled entity** in a template | `states()` = `unknown`, **not** `unavailable` — a template checking `unavailable` will *not* fire. (Sharp edge; use a real outage or a state override to simulate.) C |
 | health entity renamed | the registry listener re-points; guard keeps watching. |
 | health entity removed / disabled | logged at ERROR ("guard is blind"); re-enabled → INFO. |
@@ -175,7 +176,7 @@ Every distinct case the system handles. *(C = confirmed by a test/probe; L = see
 | unhealthy < debounce then healthy | blip absorbed, no recovery. |
 | `can_recover()` false (missing switch / no port / invalid action) | `ESCALATED` (`recovery_blocked`), no blind action. C |
 | `recover()` raises (e.g. missing service) | failed attempt → retry/escalate, never false success. C |
-| no health-check (fire-and-forget) | one attempt, assumed success; continuous monitoring re-triggers if it didn't work. |
+| Health Check off (fire-and-forget) | one attempt, assumed success; continuous monitoring re-triggers if it didn't work. |
 | health returns within boot_window | success → cooldown. L |
 | boot_window times out, attempts left | next attempt. |
 | boot_window times out, no attempts left | `ESCALATED` (`recovery_failed`). |
@@ -218,7 +219,7 @@ Every distinct case the system handles. *(C = confirmed by a test/probe; L = see
 | device aged out of the switch table while down | learned-while-healthy cache lets recovery still fire. |
 | port status sensor lags / already off | `_await_status` returns immediately or times out (WARNING) but the cycle continues. |
 | concurrent `repair_poe_port` on one port | coalesced — callers join the in-flight cycle; one cycle, not N. C |
-| `repair_poe_port` with unresolvable id | logs ERROR, returns False; the calling action continues (health-check still gates success). |
+| `repair_poe_port` with unresolvable id | logs ERROR, returns False; the calling action continues (Health Check still gates success). |
 
 ### Guard linking
 
@@ -247,7 +248,7 @@ Every distinct case the system handles. *(C = confirmed by a test/probe; L = see
 | bad notify action | logged, no crash (notify runs detached). |
 | port YAML import invalid | `import_failed` with the reason; list untouched. |
 | import merge vs replace | upsert by `label` / overwrite. |
-| reactive attribute/state pickers | follow the sibling entity within the same section. |
+| reactive attribute/state pickers | follow the sibling entity field live (device step is flat; the port editor binds within its section). |
 | own entities in pickers | excluded (no self-watch / self-switch). |
 
 ---

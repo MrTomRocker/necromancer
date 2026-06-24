@@ -2,7 +2,7 @@
 
 > Try the polite fix first — a graceful restart — and only reach for the sledgehammer (a force-kill or a full add-on restart) inside the *same* recovery attempt when the gentle path didn't take.
 
-**Concepts shown:** template guard · off/on actions & run an action · escalating recovery (`if/then`) · `wait_template` gating · `continue_on_timeout` / `continue_on_error` · health-check verify · progress notify (`necromancer.notify_guard`)
+**Concepts shown:** template guard · off/on actions & run an action · escalating recovery (`if/then`) · `wait_template` gating · `continue_on_timeout` / `continue_on_error` · Health Check verify · progress notify (`necromancer.notify_guard`)
 **Use it for:** Docker containers, add-ons, services — anything where a soft restart sometimes needs a hard one.
 
 ## The problem
@@ -59,7 +59,7 @@ Off/on delay: `5` s. On action:
     entity_id: switch.my_container
 ```
 
-Health (template — guard is *healthy* when this renders truthy):
+Health (template — guard is *healthy* when this renders `true`):
 
 ```jinja
 {{ is_state('binary_sensor.my_container_online', 'on') }}
@@ -76,7 +76,7 @@ stale. Pressing the built-in **Restart** button usually re-attaches the coordina
 it doesn't, restarting the whole add-on is the bigger hammer.
 
 This one fits a single sequence, so use **Run an action** (`action_call`) with a
-health-check:
+Health Check:
 
 ```yaml
 - service: button.press

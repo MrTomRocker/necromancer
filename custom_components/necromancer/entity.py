@@ -47,7 +47,7 @@ class NecromancerEntity(Entity):
                 identifiers={(DOMAIN, subentry_id)},
                 name=engine.name,
                 manufacturer="Necromancer",
-                model="Monitored device",
+                model="Necromancer guard monitored device",
             )
 
     @staticmethod

@@ -72,6 +72,7 @@ from .config_flow_helpers.schemas import (
     _strategy_schema,
     _switch_defaults,
     _switch_schema,
+    _validate_port_identity,
 )
 from .const import (
     CONF_ACTION,
@@ -509,18 +510,25 @@ class NecromancerOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show the port form; append a new port or replace the one being edited."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             port = _flatten_sections(user_input)
-            if self._editing and 0 <= self._edit_index < len(self._ports):
-                self._ports[self._edit_index] = port
+            if conflict := _validate_port_identity(port):
+                errors[conflict[0]] = conflict[1]
             else:
-                self._ports.append(port)
-            self._editing = False
-            return await self.async_step_init()
-        current = self._ports[self._edit_index] if self._editing else {}
+                if self._editing and 0 <= self._edit_index < len(self._ports):
+                    self._ports[self._edit_index] = port
+                else:
+                    self._ports.append(port)
+                self._editing = False
+                return await self.async_step_init()
+            current = port
+        else:
+            current = self._ports[self._edit_index] if self._editing else {}
         return self.async_show_form(
             step_id="add_port",
             data_schema=_port_schema(current, exclude=_own_entities(self.hass)),
+            errors=errors,
         )
 
     async def async_step_edit_port(

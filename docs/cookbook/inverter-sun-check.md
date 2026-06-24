@@ -16,7 +16,7 @@ You want to catch the *semantic* fault: bright outside, but no power coming in.
 
 ## The guard
 
-The health is a Jinja **template** ([Health sources](../../README.md#health-sources)) that returns
+The health is a Jinja **template** ([Health Sources](../../README.md#health-sources)) that returns
 `true` while everything is fine and `false` only when the inverter is genuinely stuck:
 
 ```jinja
@@ -54,7 +54,7 @@ nothing is acted on. It clears itself back to `ok` the moment health returns.
 
 ## The clever bit
 
-The health source asks **"is it doing its JOB?"**, not "is it reachable?". Cross-checking three
+The Health Source asks **"is it doing its JOB?"**, not "is it reachable?". Cross-checking three
 independent signals — brightness, output, and temperature — turns a fuzzy "something seems off" into
 a precise, defensible condition.
 

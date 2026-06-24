@@ -2,7 +2,7 @@
 
 > Power-cycle a hung PoE access point by its switch port automatically — but never mid-firmware-update, and never just because the controller blinked.
 
-**Concepts shown:** template guard · Auto-PoE · health-check verify · firmware-update gate · controller-down gate
+**Concepts shown:** template guard · Auto-PoE · Health Check verify · firmware-update gate · controller-down gate
 **Use it for:** PoE access points, cameras, IP phones, switches — anything you reboot by cutting its PoE port.
 
 ## The problem
@@ -23,10 +23,11 @@ template that knows about both traps, handles all of it.
 
 ## The guard
 
-A template-based health source paired with the Auto-PoE strategy. The AP is identified by
-its **MAC**, so Necromancer resolves the right [PoE port](../../README.md#poe-ports) itself.
+A template-based Health Source paired with the Auto-PoE strategy. The AP is the **monitored
+device**, identified by its **MAC**, so Necromancer resolves the right
+[PoE port](../../README.md#poe-ports) itself.
 
-Health (template — guard is *healthy* when this renders truthy):
+Health Template (guard is *healthy* when this renders `true`):
 
 ```jinja
 {{ has_value('sensor.u7_lite_state')
@@ -70,7 +71,7 @@ max_attempts: 2    # two port-cycles, then escalate
 
 ## The clever bit
 
-The whole design is in that one health template. It has three jobs:
+The whole design is in that one Health Template. It has three jobs:
 
 1. **Firmware-update gate** — `or (state_attr('update.u7_lite', 'in_progress') | bool)`.
    While a firmware flash is running, this term is true, so the guard reads **healthy** no

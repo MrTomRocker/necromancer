@@ -142,7 +142,7 @@ Key timing fields (the **behaviour** block):
 | `cooldown` | Pause after a recovery cycle before re-arming. |
 | `max_attempts` | Retries within one cycle before escalating. |
 
-**Health-check vs fire-and-forget.** `behavior.health_check` (a per-recovery toggle
+**Health Check vs fire-and-forget.** `behavior.health_check` (a per-recovery toggle
 in the wizard, default on) decides:
 
 - **On**: after `recover()`, the engine waits (event-driven, up to `boot_window`)
@@ -178,7 +178,7 @@ keeps its last-known fallback port across a reboot. The display entities
 
 ---
 
-## 4. Health sources (`core/health/`)
+## 4. Health Sources (`core/health/`)
 
 `evaluate() -> Health` is always callable (so the VERIFY step can re-check). A
 source that tracks something other than entity states registers its own listener
@@ -188,7 +188,7 @@ in `async_setup(on_change)` (returns an unsub) and exposes an empty
 | Type | What it is | Healthy when |
 |---|---|---|
 | `entity_state` | One entity’s state or attribute vs on/off **value lists**. | value ∈ `on_value` → OK; ∈ `off_value` → unhealthy; else `UNKNOWN`. `unavailable`/`unknown` → `UNKNOWN` **unless** listed in `off_value` (explicit off wins). |
-| `template` | An inline Jinja template that returns `true`/`false`. | `result_as_boolean(render)` → OK/unhealthy; render error, empty, `none`, `unknown`/`unavailable` → `UNKNOWN`. |
+| `template` | An inline Jinja template that returns a boolean. | whitelist: `true`/`on`/`1`/`yes` → OK, `false`/`off`/`0`/`no` → UNHEALTHY; anything else (render error, blank, `none`, `unknown`/`unavailable`, unrecognized text) → `UNKNOWN`. |
 
 The **template** source is the inline alternative to building a template *entity*.
 Because a template is a continuous, checkable expression (unlike a momentary
@@ -236,7 +236,7 @@ are the sole truly-local names.
 ### The strategy matrix
 
 The wizard offers **5 options**: notify-only plus 4 recovery strategies (one per
-action shape). The health-check is a separate per-recovery toggle
+action shape). The Health Check is a separate per-recovery toggle
 (`behavior.health_check`, default on), not a strategy variant:
 
 ```
@@ -244,12 +244,12 @@ notify    → noop
 switch    → switch_cycle
 action    → action_call
 actions   → action_cycle
-poe_port  → poe_port      (own staged verify; + device health-check when enabled)
+poe_port  → poe_port      (own staged verify; + device Health Check when enabled)
 ```
 
 A strategy maps to a `driver type`; `behavior.health_check` (the toggle) decides
 whether the engine's VERIFY step runs. Auto-PoE keeps its own staged verify (port
-goes offline → comes online) on top of the device health-check (when enabled).
+goes offline → comes online) on top of the device Health Check (when enabled).
 
 **Auto-PoE remembers its port.** A device that is down can age out of the
 switch's FDB/LLDP neighbour table, so resolving it live would find *nothing*
@@ -366,17 +366,27 @@ strategy step lists **notify-only** (first) plus the four recovery strategies;
 picking notify-only routes to a notification step instead of a recovery one. There
 is no separate "mode" field — the notify-vs-recover choice *is* the strategy choice.
 
-- **Sections.** Fields are grouped into `data_entry_flow.section`s with a heading
-  and description (state check, recovery action, behaviour, notification, assigned
-  device, linked guards, and —
-  only when a device is assigned — *reload* the assigned device's integration after
-  a repair; ports: switch / recognition / status / timing). Sections nest their
-  values, so submitted input is flattened back up (`_flatten_sections`).
+- **Flat device step.** The device & health step is **section-less**: its fields
+  (`name`, `entity_id`, `attribute`, `on_value`, `off_value` for state-based — or
+  `template` for template-based — plus the optional `device_id`) are all
+  **top-level** (`_health_fields` returns a flat dict). So the flow submits a flat
+  dict — e.g. `{"name": …, "entity_id": …, "on_value": [...], "off_value": [...]}`
+  for state-based, `{"name": …, "template": "…"}` for template-based, with
+  `device_id` top-level — not nested `state_check`/`template_check`/`assigned_device`
+  sub-dicts.
+- **Sections (recover steps).** The recovery/notify forms still group fields into
+  `data_entry_flow.section`s with a heading and description (recovery action,
+  behaviour, notification, linked guards, and — only when a device is assigned —
+  *reload* the assigned device's integration after a repair; ports: switch /
+  recognition / status / timing). Sections nest their values, so submitted input is
+  flattened back up (`_flatten_sections`); on the now-flat device step the same
+  helper is a harmless no-op.
 - **Reactive selectors.** Attribute and state pickers follow their sibling entity
   field live via a per-field `context` mapping (`filter_entity` / `filter_attribute`).
-  The reacting field and the entity it follows must sit in the **same section**
-  (a section renders its own nested `ha-form` that regenerates context from the
-  section’s data).
+  The reacting field and the entity it follows must sit in the **same form scope**:
+  on the flat device step they share the top-level form; inside a port (which keeps
+  its sections) they stay in the same section, since each section renders its own
+  nested `ha-form` that regenerates context from the section’s data.
 - **Own entities excluded — scoped.** The switch/actuator/port pickers exclude
   **all** Necromancer entities (`_own_entities`) — you never power-cycle a view
   entity. The **health** picker excludes only **this guard's** entities
@@ -429,8 +439,12 @@ an attribute) and "last seen healthy" is left to state history.
 `async_register_entity_service` (targeted at `sensor.*_status`; device/area targets
 expand to it): `reset`, `snooze(duration)`, `unsnooze`, `notify_guard` (see §3). The status sensor
 also carries the `snooze_until` attribute. Recover-now and arm stay the button/switch
-rather than duplicating them as services; the port-level `repair_poe_port` (§5) is the
-one domain-level service.
+rather than duplicating them as services. The remaining services are **domain-level**
+(no entity target): the port-level `repair_poe_port` (§5), the maintenance-mode
+`snooze_all` / `unsnooze_all` (§3), and the two **response services** `check_health`
+(returns a guard's current Health State) and `wait_for_health(timeout, check_first)`
+(awaits OK / timeout) — both take a `guard` status entity and reuse that guard's own
+Health Check, so a recovery script can poll Health out-of-band.
 
 ---
 
@@ -464,7 +478,7 @@ core/policies/          base, standard, notify
 
 ---
 
-## 11. Data flow (one recovery cycle, `switch` with health-check on)
+## 11. Data flow (one recovery cycle, `switch` with Health Check on)
 
 ```
 health entity changes

@@ -89,13 +89,22 @@ async def test_template_boolean_and_unknown(hass, _):
     def verdict(tmpl):
         return create_health(hass, {"type": "template", "template": tmpl}).evaluate()
 
+    # healthy whitelist: true / on / 1 / yes
     assert verdict("{{ true }}") is Health.OK
     assert verdict("{{ 1 == 1 }}") is Health.OK
     assert verdict("{{ 'on' }}") is Health.OK
+    assert verdict("{{ 'yes' }}") is Health.OK
+    assert verdict("{{ 1 }}") is Health.OK
+    # faulty: the inverse (false / off / 0 / no)
     assert verdict("{{ false }}") is Health.UNHEALTHY
     assert verdict("{{ 0 }}") is Health.UNHEALTHY
+    assert verdict("{{ 'off' }}") is Health.UNHEALTHY
+    assert verdict("{{ 'no' }}") is Health.UNHEALTHY
+    # everything else -> unknown (no false alarm)
     assert verdict("{{ '' }}") is Health.UNKNOWN
     assert verdict("{{ none }}") is Health.UNKNOWN
+    assert verdict("{{ 'unavailable' }}") is Health.UNKNOWN
+    assert verdict("{{ 'kaputt' }}") is Health.UNKNOWN  # unrecognized -> unknown, not faulty
     assert verdict("{{ states('sensor.does_not_exist') }}") is Health.UNKNOWN
     assert verdict("{{ 1/0 }}") is Health.UNKNOWN  # render error -> unknown
 
@@ -236,6 +245,8 @@ async def test_ports_yaml_rejections(hass, _):
         ": : bad yaml :",                    # malformed YAML
         "",                                  # nothing
         "null",                              # explicit null
+        "- {label: x, actuator: switch.a, status_entity: s, id_static: dev, id_entity: sensor.n}",  # two id sources
+        "- {label: x, actuator: switch.a, status_entity: s, id_attribute: mac}",  # attribute, no id entity
     ]
     for t in bad:
         try:
@@ -246,6 +257,20 @@ async def test_ports_yaml_rejections(hass, _):
             raise AssertionError(f"expected ValueError for: {t!r}")
     # an explicit empty list is valid (it just means "no ports")
     assert cf._parse_ports_yaml("[]") == []
+
+
+async def test_validate_port_identity(hass, _):
+    v = cf._validate_port_identity
+    assert v({cf.CONF_ID_STATIC: "x", cf.CONF_ID_ENTITY: "sensor.a"}) == (
+        cf.CONF_ID_STATIC,
+        "id_conflict",
+    )
+    assert v({cf.CONF_ID_ATTRIBUTE: "mac"}) == (
+        cf.CONF_ID_ATTRIBUTE,
+        "attribute_needs_entity",
+    )
+    assert v({cf.CONF_ID_STATIC: "x"}) is None
+    assert v({cf.CONF_ID_ENTITY: "sensor.a", cf.CONF_ID_ATTRIBUTE: "mac"}) is None
 
 
 async def test_ports_yaml_roundtrip_and_merge(hass, _):

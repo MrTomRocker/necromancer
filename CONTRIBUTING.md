@@ -34,7 +34,7 @@ GitHub issues are used to track public bugs. Report a bug by [opening a new issu
 **Great bug reports** tend to have:
 
 - A quick summary and/or background.
-- Steps to reproduce — be specific, and include the guard configuration (health source, strategy, behaviour) when relevant.
+- Steps to reproduce — be specific, and include the guard configuration (Health Source, strategy, behaviour) when relevant.
 - The relevant `necromancer` log lines (set the logger to `debug` — see below) and the value of `sensor.<guard>_status`.
 - What you expected to happen.
 - What actually happened.

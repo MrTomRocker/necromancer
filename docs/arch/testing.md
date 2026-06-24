@@ -17,7 +17,7 @@ one of them:
    `unknown`/`unavailable`) → `UNKNOWN`, never `UNHEALTHY`. No recovery is
    triggered on `UNKNOWN`.
 2. **No false success.** A recovery only counts as success if the action ran
-   without raising *and* (with the health-check on) health verified OK. A raising
+   without raising *and* (with the Health Check on) health verified OK. A raising
    `recover()` is a failed attempt → retry/escalate.
 3. **Verify is possible.** Every `HealthSource.evaluate()` is callable on demand,
    so the VERIFY step works (this is why health is a *template*, never a momentary
@@ -46,21 +46,21 @@ one of them:
 ## 2. Level 1 — unit (pure logic / real `hass`)
 
 Fast, deterministic. Three runnable in-process modules cover this level today (run
-them with the dev venv, see §5): **`tests/test_units.py`** (30), **`tests/test_poe.py`**
-(16), **`tests/test_engine.py`** (34). On top sits a **pytest suite on HA's native test
+them with the dev venv, see §5): **`tests/test_units.py`** (31), **`tests/test_poe.py`**
+(17), **`tests/test_engine.py`** (34). On top sits a **pytest suite on HA's native test
 harness** (`tests/suite/`, run via `pytest tests/components/necromancer/`) that automates
 Level 2 in-process — see §3. Each row maps to an invariant:
 
 | Module | What to assert | Covered by |
 |---|---|---|
 | `core/health/entity_state.py` | value-list mapping → OK/UNHEALTHY/UNKNOWN; unavailable/unknown → UNKNOWN; explicit-off-wins; legacy `healthy_state` fallback. | `test_units` |
-| `core/health/template.py` | `result_as_boolean` cases (`true/false/on/0/'on'`); empty/`none`/`unknown` → UNKNOWN; render error → UNKNOWN. | `test_units` |
+| `core/health/template.py` | whitelist: `true`/`on`/`1`/`yes` → OK, `false`/`off`/`0`/`no` → UNHEALTHY; everything else (`unavailable`, `none`, blank, unrecognized, render error) → UNKNOWN. | `test_units` |
 | `core/drivers/*.can_recover` | missing switch / missing+invalid action → `(False, reason)`; the poe_port adapter blocks on no/ambiguous match. | `test_units`, `test_poe` |
 | `config_flow` helpers | `_flatten_sections` (nested→flat), `_as_list`, `_build_data` (health block per source type, behaviour per check), `_current_strategy`, `_source_type_of`. | `test_units` |
-| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / `null` / list-of-scalar / malformed YAML / non-numeric **or negative** timing; trim, scalar→list, missing/empty status→default, int→str. `_ports_to_yaml` round-trips; import **merge** = upsert by `label`, **replace** = overwrite. | `test_units` |
+| `config_flow` ports YAML | `_parse_ports_yaml`/`_normalize_imported_port`: required `label`/`actuator`/`status_entity`; reject not-a-list / empty / `null` / list-of-scalar / malformed YAML / non-numeric **or negative** timing; trim, scalar→list, missing/empty status→default, int→str. `_ports_to_yaml` round-trips; import **merge** = upsert by `label`, **replace** = overwrite. `_validate_port_identity`: a port gives its id ONE way — an entity (+ optional attribute) or a static label — setting both is rejected (`id_conflict`), and an attribute with no id-entity is rejected (`attribute_needs_entity`). | `test_units` |
 | `core/actions.py` | `async_validate` normalises `service`→`action`; invalid sequence raises `vol.Invalid`. | `test_units` |
 | `core/links.py` | `link_components` / `group_of`: undirected union → connected components (clique closure); transitive (A–B, B–C ⇒ `{A,B,C}`); a one-sided link reads symmetric; stale ids dropped. | `test_units` |
-| `core/poe.py` (fabric) + `poe_port` driver | `resolve_with_reason`: one live match wins (refreshes cache) → last-known cache → ambiguous/none with a reason; `repair` sets status `recovering`→`good`/`failed`, with concurrent callers **coalescing** onto one in-flight cycle (`test_concurrent_callers_coalesce`); a status change fires `necromancer_poe_port`; the `poe_port` driver delegates resolve+cycle to the fabric (one cache, one cycle, **shared with the service** — `test_driver_and_service_coalesce`). | `test_poe` |
+| `core/poe.py` (fabric) + `poe_port` driver | `resolve_with_reason`: one live match wins (refreshes cache) → last-known cache → ambiguous/none with a reason; a port that sets both an id-entity and a static label is misconfigured → `_port_id` ignores it and warns (`test_port_with_both_id_sources_is_ignored`); `repair` sets status `recovering`→`good`/`failed`, with concurrent callers **coalescing** onto one in-flight cycle (`test_concurrent_callers_coalesce`); a status change fires `necromancer_poe_port`; the `poe_port` driver delegates resolve+cycle to the fabric (one cache, one cycle, **shared with the service** — `test_driver_and_service_coalesce`). | `test_poe` |
 
 ## 3. Level 2 — integration (HA test harness or dev container)
 
@@ -93,7 +93,7 @@ exploratory and true end-to-end live checks. Drive the real flows and the engine
   entity state; let it learn the port while healthy, then make the device vanish
   (id gone) **and** go unhealthy → the recovery must cycle the *cached* port
   (WARNING "falling back to last-known port"), not block with "no port matches".
-- **Guard linking**: two linked guards on a shared health source; trip one → the
+- **Guard linking**: two linked guards on a shared Health Source; trip one → the
   other logs "linked guard is repairing — following", holds (no own action), and
   re-validates after → both end OK and the follower also enters cooldown. Closure:
   a one-sided link still shows the partner on *both* guards' next edit; unlinking
@@ -119,6 +119,11 @@ exploratory and true end-to-end live checks. Drive the real flows and the engine
   re-derives); `snooze`/`unsnooze` (→ `SNOOZED`, ignores health, auto-resumes, refused
   mid-recovery); `snooze_all`/`unsnooze_all` (bulk, no target, busy guards skipped
   best-effort).
+- **Health primitives** *(`tests/suite/test_health_primitives.py`)*: the response
+  services `check_health` (returns the guard's current Health verdict; unknown guard
+  raises) and `wait_for_health` (waits up to a timeout / the boot window for OK,
+  `check_first` short-circuits when already healthy, reports `timed_out` + `waited_s`,
+  uses its own waiter not the verify event) — both keyed by the guard's status entity.
 
 These run today against the dev container by driving the REST/WS flow API and
 asserting on `sensor.*_status` + the error log (see the regression checklist for

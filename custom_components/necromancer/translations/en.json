@@ -29,31 +29,48 @@
         "data": {
           "label": "Port name"
         },
+        "data_description": {
+          "label": "A name for this port, e.g. its switch port number or the device it powers."
+        },
         "sections": {
           "power": {
             "name": "Power switch",
-            "description": "Switch that cuts power (PoE) on the port (e.g. a smart plug or PoE switch).",
+            "description": "Switch that cuts power (PoE) on the port.",
             "data": {
               "actuator": "switch / input_boolean"
+            },
+            "data_description": {
+              "actuator": "e.g. a smart plug or PoE switch — a `switch` or `input_boolean`."
             }
           },
           "identity": {
             "name": "Recognition",
-            "description": "How Necromancer knows which device is on this port — an entity that reports it, or a fixed value (e.g. MAC, IP or name).",
+            "description": "The id of the device on this port. A Necromancer guard with the Auto-PoE strategy matches its monitored device's id against it and cycles this port. Provide the id one way — from an entity (live), or a static label.",
             "data": {
-              "id_entity": "Entity with the connected device (optional)",
-              "id_attribute": "Attribute of that entity (empty = state)",
-              "id_static": "Or a fixed value (if there's no entity)"
+              "id_entity": "Entity reporting the id",
+              "id_attribute": "Attribute of that entity",
+              "id_static": "Static label"
+            },
+            "data_description": {
+              "id_entity": "An entity whose state is the id of the device on this port — for ports where the device can change.",
+              "id_attribute": "Read this attribute of the entity instead of its state (leave empty to use the state).",
+              "id_static": "A static value identifying the device on this port — e.g. a MAC, IP or a name you assign. Use this instead of an entity, not together with one."
             }
           },
           "status": {
             "name": "Online status",
-            "description": "How Necromancer sees whether the port is online — to confirm the power-cycle worked (e.g. a ping or reachability sensor).",
+            "description": "How Necromancer sees whether the port is online — to confirm the power-cycle worked.",
             "data": {
-              "status_entity": "Status entity (online/offline)",
-              "status_attribute": "Attribute of that entity (empty = state)",
-              "status_on": "Value when online (e.g. on)",
-              "status_off": "Value when offline (e.g. off)"
+              "status_entity": "Status entity",
+              "status_attribute": "Attribute of that entity",
+              "status_on": "Value when online",
+              "status_off": "Value when offline"
+            },
+            "data_description": {
+              "status_entity": "An entity that reports whether the port is online — e.g. a ping or reachability sensor.",
+              "status_attribute": "Leave empty to use the entity's own state.",
+              "status_on": "e.g. `on`.",
+              "status_off": "e.g. `off`."
             }
           },
           "timing": {
@@ -63,6 +80,11 @@
               "off_on_delay": "Wait between off and on",
               "off_timeout": "Max wait until offline",
               "on_timeout": "Max wait until online"
+            },
+            "data_description": {
+              "off_on_delay": "How long to stay off before powering back on.",
+              "off_timeout": "How long to wait for the port to read offline after cutting power.",
+              "on_timeout": "How long to wait for the port to come back online after restoring power."
             }
           }
         }
@@ -102,15 +124,17 @@
       }
     },
     "error": {
-      "import_failed": "Import failed: {error}"
+      "import_failed": "Import failed: {error}",
+      "id_conflict": "Set the device id one way — an entity or a static label, not both.",
+      "attribute_needs_entity": "An attribute needs an id entity to read it from. Pick an entity or clear the attribute."
     }
   },
   "config_subentries": {
     "device": {
-      "entry_type": "Monitored device",
+      "entry_type": "Necromancer guard",
       "initiate_flow": {
-        "user": "Add device",
-        "reconfigure": "Reconfigure device"
+        "user": "Add Necromancer guard",
+        "reconfigure": "Reconfigure Necromancer guard"
       },
       "error": {
         "no_self_link": "Necromancer's own devices can't be linked. Pick a different device.",
@@ -122,235 +146,297 @@
       },
       "step": {
         "user": {
-          "title": "State source",
-          "description": "How should Necromancer tell whether the device is OK — from an entity's state, or from a Jinja template?",
+          "title": "Health Source",
+          "description": "You're adding a Necromancer guard. How should Necromancer detect the monitored device's Health State — from an entity's state, or from a Jinja template?",
           "data": {
             "source_type": "Source type"
           }
         },
         "reconfigure": {
-          "title": "State source",
-          "description": "How should Necromancer tell whether the device is OK — from an entity's state, or from a Jinja template?",
+          "title": "Health Source",
+          "description": "How should Necromancer detect the monitored device's Health State — from an entity's state, or from a Jinja template?",
           "data": {
             "source_type": "Source type"
           }
         },
         "device": {
-          "title": "Device & state",
-          "description": "Give the device a name and define how its state is detected and what happens on a problem.",
+          "title": "Health State & Device",
+          "description": "Give the Necromancer guard a name and define how its Health State is detected.",
           "data": {
-            "name": "Name"
+            "name": "Name",
+            "entity_id": "Entity that shows the Health State",
+            "attribute": "Attribute",
+            "on_value": "Value meaning \"OK\"",
+            "off_value": "Value meaning \"faulty\"",
+            "template": "Health Template",
+            "device_id": "Assigned Home Assistant device (optional)"
           },
-          "sections": {
-            "state_check": {
-              "name": "State check",
-              "description": "How Necromancer tells whether the device is OK (e.g. a ping or reachability sensor). Leave the attribute empty to use the entity's state; any value other than \"OK\"/\"faulty\" counts as unknown and triggers nothing.",
-              "data": {
-                "entity_id": "Entity that shows the state",
-                "attribute": "Attribute (empty = entity's state)",
-                "on_value": "Value meaning \"OK\" (e.g. on, home, online)",
-                "off_value": "Value meaning \"faulty\" (e.g. off, unavailable)"
-              }
-            },
-            "template_check": {
-              "name": "State template",
-              "description": "A Jinja template that returns true (OK) or false (faulty) — e.g. a comparison like CPU below 90, or is_state(...). It's re-checked when referenced entities change. An empty/unknown result or a render error counts as unknown (no false alarm). Point it at the guarded device — don't reference this guard's own status/health entities, or you create a feedback loop.",
-              "data": {
-                "template": "Template"
-              }
-            },
-            "assigned_device": {
-              "name": "Assigned device (optional)",
-              "description": "Attaches Necromancer's status entities to an existing device."
-            }
+          "data_description": {
+            "name": "The name of this Necromancer guard; its status entities are named after it.",
+            "entity_id": "The entity that reports the monitored device's state, e.g. a ping or reachability sensor.",
+            "attribute": "Leave empty to use the entity's own state.",
+            "on_value": "e.g. `on`, `home`, `online`. Any value other than this or the faulty value counts as `unknown` and triggers nothing.",
+            "off_value": "e.g. `off`, `unavailable`.",
+            "template": "Return `true`, `on`, `1` or `yes` for OK; `false`, `off`, `0` or `no` for faulty — e.g. a comparison like CPU below 90, or `is_state(...)`. Anything else (`unavailable`, `unknown`, `none`, a blank result, or a render error) counts as `unknown` and triggers nothing (no false alarm). Re-checked when referenced entities change. Point it at the monitored device — not at this guard's own status/health entities, or you create a feedback loop.",
+            "device_id": "Optional. Adds this Necromancer guard's status entities to the chosen Home Assistant device, so they appear on its device page."
           }
         },
         "strategy": {
           "title": "Recovery strategy",
-          "description": "How should the device be brought back when it fails? On the next screen a health-check toggle (on by default) decides whether the fix is verified against the device's health before going quiet; with it off, the action is assumed to have worked.",
+          "description": "How should the monitored device be brought back when it fails? On the next screen a Health Check toggle (on by default) decides whether the fix is verified against the monitored device's health before going quiet; with it off, the action is assumed to have worked.",
           "data": {
             "strategy": "Strategy"
           }
         },
         "switch": {
           "title": "Power-cycle a switch",
-          "description": "Powers a switch off and on when the device fails. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry.",
+          "description": "Powers a switch off and on when the monitored device fails.",
           "data": {
             "switch_entity": "Switch to power off and on (e.g. a smart plug)",
             "off_on_delay": "Wait between off and on"
           },
+          "data_description": {
+            "switch_entity": "The switch to power off and on — e.g. a smart plug the monitored device is plugged into.",
+            "off_on_delay": "How long to stay off before switching back on."
+          },
           "sections": {
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a Health Check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
-                "health_check": "Verify recovery (health-check)",
-                "boot_window": "Wait until the device is healthy again",
+                "health_check": "Verify recovery (Health Check)",
+                "boot_window": "Wait until the monitored device is healthy again",
                 "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
+              },
+              "data_description": {
+                "debounce": "How long a fault must persist before Necromancer acts — brief blips are absorbed and don't trigger a recovery.",
+                "health_check": "On (default): the recovery is verified against the monitored device's Health State before the guard goes quiet. Off: the action is assumed to have worked and goes directly to cooldown.",
+                "boot_window": "With Health Check on: how long to wait after the action for the monitored device to read healthy again.",
+                "cooldown": "A quiet period after a successful recovery before the guard watches again.",
+                "max_attempts": "How many times to retry before escalating — when verifying (Health Check on), or when the action itself errors."
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything); Necromancer passes the alert text and context as variables, so you decide whether and how to be told. Take the ready-made message, or build your own. Variables: message, name, event_text, event, attempt, max, attempts, reason. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
             },
             "linked_guards": {
               "name": "Linked guards",
-              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "description": "Group this guard with other recovery guards so they coordinate instead of recovering in parallel.",
               "data": {
                 "linked_guards": "Guards in this group",
-                "notify_follower_success": "Report success even when this guard follows a group repair"
+                "notify_follower_success": "Report success even when this guard follows a group recovery"
+              },
+              "data_description": {
+                "linked_guards": "When any guard in the group recovers, the others follow — they wait and re-check afterwards instead of recovering in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+                "notify_follower_success": "On: a guard that recovered only by following the group (it took no action itself) still reports success. Off: only its own recovery counts."
               }
             },
             "reload": {
               "name": "Restart device integration",
-              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "description": "After a recovery, reload the assigned device's integration before re-checking.",
               "data": {
-                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_entry": "Restart the assigned device's integration after a recovery",
                 "reload_delay": "Wait before restarting"
+              },
+              "data_description": {
+                "reload_entry": "Reload the assigned device's integration after the recovery action, before the Health Check runs — useful when Home Assistant must reconnect to the device for it to read healthy again.",
+                "reload_delay": "How long to wait after the reload before re-checking, giving the integration time to reconnect."
               }
             }
           }
         },
         "action": {
           "title": "Run an action",
-          "description": "Runs your action when the device fails. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry.",
+          "description": "Runs your action when the monitored device fails.",
           "sections": {
             "recovery_action": {
               "name": "Recovery action",
-              "description": "What to run to bring the device back. An action can be anything Home Assistant can do — a service or script call, an SSH/`shell_command`, a `rest_command` or webhook, or a multi-step sequence with delays, waits and conditions. It runs blocking; with the health-check variant Necromancer then waits (up to the boot window) for the device to report OK again.",
+              "description": "What to run to bring the monitored device back. An action can be anything Home Assistant can do — a service or script call, an SSH/shell_command, a rest_command or webhook, or a multi-step sequence with delays, waits and conditions. It runs blocking; with Health Check on, Necromancer then waits (up to the boot window) for the monitored device to report OK again. Variables: attempt, max, name, guard_entity_id.",
               "data": {
                 "action": "Action (e.g. a script, service, SSH, webhook)"
               }
             },
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a Health Check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
-                "health_check": "Verify recovery (health-check)",
-                "boot_window": "Wait until the device is healthy again",
+                "health_check": "Verify recovery (Health Check)",
+                "boot_window": "Wait until the monitored device is healthy again",
                 "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
+              },
+              "data_description": {
+                "debounce": "How long a fault must persist before Necromancer acts — brief blips are absorbed and don't trigger a recovery.",
+                "health_check": "On (default): the recovery is verified against the monitored device's Health State before the guard goes quiet. Off: the action is assumed to have worked and goes directly to cooldown.",
+                "boot_window": "With Health Check on: how long to wait after the action for the monitored device to read healthy again.",
+                "cooldown": "A quiet period after a successful recovery before the guard watches again.",
+                "max_attempts": "How many times to retry before escalating — when verifying (Health Check on), or when the action itself errors."
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything); Necromancer passes the alert text and context as variables, so you decide whether and how to be told. Take the ready-made message, or build your own. Variables: message, name, event_text, event, attempt, max, attempts, reason. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
             },
             "linked_guards": {
               "name": "Linked guards",
-              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "description": "Group this guard with other recovery guards so they coordinate instead of recovering in parallel.",
               "data": {
                 "linked_guards": "Guards in this group",
-                "notify_follower_success": "Report success even when this guard follows a group repair"
+                "notify_follower_success": "Report success even when this guard follows a group recovery"
+              },
+              "data_description": {
+                "linked_guards": "When any guard in the group recovers, the others follow — they wait and re-check afterwards instead of recovering in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+                "notify_follower_success": "On: a guard that recovered only by following the group (it took no action itself) still reports success. Off: only its own recovery counts."
               }
             },
             "reload": {
               "name": "Restart device integration",
-              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "description": "After a recovery, reload the assigned device's integration before re-checking.",
               "data": {
-                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_entry": "Restart the assigned device's integration after a recovery",
                 "reload_delay": "Wait before restarting"
+              },
+              "data_description": {
+                "reload_entry": "Reload the assigned device's integration after the recovery action, before the Health Check runs — useful when Home Assistant must reconnect to the device for it to read healthy again.",
+                "reload_delay": "How long to wait after the reload before re-checking, giving the integration time to reconnect."
               }
             }
           }
         },
         "actions": {
           "title": "Off/on actions",
-          "description": "Runs the off action, waits, then the on action when the device fails. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry.",
+          "description": "Runs the off action, waits, then the on action when the monitored device fails.",
           "sections": {
             "recovery_action": {
               "name": "Recovery actions",
-              "description": "Two sequences with a wait between: the off action (cut power / turn off), then the on action (restore / turn on). Each can be any Home Assistant action — service or script, SSH, `rest_command`, webhook, sequence. Variables you set in the off action — plus `attempt` and `max` — are readable in the on action, so you can capture state before the cut and restore it afterwards, no helper entity needed.",
+              "description": "Two sequences with a wait between: the off action, then the on action. Each can be any Home Assistant action — service or script, SSH, rest_command, webhook, sequence. Variables: attempt, max, name, guard_entity_id; any variable you set in the off action is also readable in the on action, so you can capture state before cutting power and restore it afterwards — no helper entity needed.",
               "data": {
-                "off_action": "Off action (cut power / turn the device off)",
-                "on_action": "On action (restore power / turn the device on)",
+                "off_action": "Off action (cut power / turn the monitored device off)",
+                "on_action": "On action (restore power / turn the monitored device on)",
                 "off_on_delay": "Wait between off and on"
+              },
+              "data_description": {
+                "off_on_delay": "How long to wait between the off and on actions."
               }
             },
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a Health Check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
-                "health_check": "Verify recovery (health-check)",
-                "boot_window": "Wait until the device is healthy again",
+                "health_check": "Verify recovery (Health Check)",
+                "boot_window": "Wait until the monitored device is healthy again",
                 "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
+              },
+              "data_description": {
+                "debounce": "How long a fault must persist before Necromancer acts — brief blips are absorbed and don't trigger a recovery.",
+                "health_check": "On (default): the recovery is verified against the monitored device's Health State before the guard goes quiet. Off: the action is assumed to have worked and goes directly to cooldown.",
+                "boot_window": "With Health Check on: how long to wait after the action for the monitored device to read healthy again.",
+                "cooldown": "A quiet period after a successful recovery before the guard watches again.",
+                "max_attempts": "How many times to retry before escalating — when verifying (Health Check on), or when the action itself errors."
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything); Necromancer passes the alert text and context as variables, so you decide whether and how to be told. Take the ready-made message, or build your own. Variables: message, name, event_text, event, attempt, max, attempts, reason. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
             },
             "linked_guards": {
               "name": "Linked guards",
-              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "description": "Group this guard with other recovery guards so they coordinate instead of recovering in parallel.",
               "data": {
                 "linked_guards": "Guards in this group",
-                "notify_follower_success": "Report success even when this guard follows a group repair"
+                "notify_follower_success": "Report success even when this guard follows a group recovery"
+              },
+              "data_description": {
+                "linked_guards": "When any guard in the group recovers, the others follow — they wait and re-check afterwards instead of recovering in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+                "notify_follower_success": "On: a guard that recovered only by following the group (it took no action itself) still reports success. Off: only its own recovery counts."
               }
             },
             "reload": {
               "name": "Restart device integration",
-              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "description": "After a recovery, reload the assigned device's integration before re-checking.",
               "data": {
-                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_entry": "Restart the assigned device's integration after a recovery",
                 "reload_delay": "Wait before restarting"
+              },
+              "data_description": {
+                "reload_entry": "Reload the assigned device's integration after the recovery action, before the Health Check runs — useful when Home Assistant must reconnect to the device for it to read healthy again.",
+                "reload_delay": "How long to wait after the reload before re-checking, giving the integration time to reconnect."
               }
             }
           }
         },
         "poe_port": {
           "title": "Auto-PoE — find the port",
-          "description": "Finds the matching PoE port by the device's id and powers it off and on. The timing settings below set how long to wait before reacting and how long to pause afterwards; with a health-check, also how long to wait for the device to recover and how often to retry. Manage the ports under the integration's \"Configure\".",
+          "description": "Finds the matching PoE port by the monitored device's id and powers it off and on. Manage the ports under the integration's \"Configure\".",
           "data": {
             "expected_id": "Device id (e.g. MAC, IP or name)"
+          },
+          "data_description": {
+            "expected_id": "The id that matches the monitored device to a configured PoE port — its MAC, IP or static label."
           },
           "sections": {
             "behavior": {
               "name": "Behaviour",
-              "description": "When Necromancer reacts, and — with a health-check — how often it retries before giving up. The defaults are usually fine.",
+              "description": "When Necromancer reacts, and — with a Health Check — how often it retries before giving up. The defaults are usually fine.",
               "data": {
                 "debounce": "Wait before reacting",
-                "health_check": "Verify recovery (health-check)",
-                "boot_window": "Wait until the device is healthy again",
+                "health_check": "Verify recovery (Health Check)",
+                "boot_window": "Wait until the monitored device is healthy again",
                 "cooldown": "Pause after a successful recovery",
                 "max_attempts": "Max attempts"
+              },
+              "data_description": {
+                "debounce": "How long a fault must persist before Necromancer acts — brief blips are absorbed and don't trigger a recovery.",
+                "health_check": "On (default): the recovery is verified against the monitored device's Health State before the guard goes quiet. Off: the action is assumed to have worked and goes directly to cooldown.",
+                "boot_window": "With Health Check on: how long to wait after the action for the monitored device to read healthy again.",
+                "cooldown": "A quiet period after a successful recovery before the guard watches again.",
+                "max_attempts": "How many times to retry before escalating — when verifying (Health Check on), or when the action itself errors."
               }
             },
             "notification": {
               "name": "Notification",
-              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything); Necromancer passes the alert text and context as variables, so you decide whether and how to be told. Take the ready-made message, or build your own. Variables: message, name, event_text, event, attempt, max, attempts, reason. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
             },
             "linked_guards": {
               "name": "Linked guards",
-              "description": "Group this guard with other recover guards. When any guard in the group repairs, the others follow — they wait and re-check afterwards instead of repairing in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+              "description": "Group this guard with other recovery guards so they coordinate instead of recovering in parallel.",
               "data": {
                 "linked_guards": "Guards in this group",
-                "notify_follower_success": "Report success even when this guard follows a group repair"
+                "notify_follower_success": "Report success even when this guard follows a group recovery"
+              },
+              "data_description": {
+                "linked_guards": "When any guard in the group recovers, the others follow — they wait and re-check afterwards instead of recovering in parallel. Linking is mutual and transitive: link to a guard that already has links and you join its whole group; to leave, clear all of them.",
+                "notify_follower_success": "On: a guard that recovered only by following the group (it took no action itself) still reports success. Off: only its own recovery counts."
               }
             },
             "reload": {
               "name": "Restart device integration",
-              "description": "After a repair attempt, reload the assigned device's integration before checking its health again — useful when Home Assistant must reconnect to the device.",
+              "description": "After a recovery, reload the assigned device's integration before re-checking.",
               "data": {
-                "reload_entry": "Restart the assigned device's integration after a repair",
+                "reload_entry": "Restart the assigned device's integration after a recovery",
                 "reload_delay": "Wait before restarting"
+              },
+              "data_description": {
+                "reload_entry": "Reload the assigned device's integration after the recovery action, before the Health Check runs — useful when Home Assistant must reconnect to the device for it to read healthy again.",
+                "reload_delay": "How long to wait after the reload before re-checking, giving the integration time to reconnect."
               }
             }
           }
@@ -361,10 +447,13 @@
           "data": {
             "debounce": "Wait before reacting"
           },
+          "data_description": {
+            "debounce": "How long a fault must persist before the notification fires — brief blips are absorbed."
+          },
           "sections": {
             "notification": {
               "name": "Notification",
-              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything), and Necromancer passes the alert text as variables, so you decide whether and how to be told. Take the ready-made `message`, or build your own from `name`, `event_text` (the line without the name) and `event`; `attempt`, `max`, `attempts` and `reason` are available where they apply. Reference a variable with double curly braces in your action.",
+              "description": "Optional — run an action when this guard hits a problem, recovery or escalation. You provide the action (a phone push, a TTS announcement, a light, a script — anything); Necromancer passes the alert text and context as variables, so you decide whether and how to be told. Take the ready-made message, or build your own. Variables: message, name, event_text, event, attempt, max, attempts, reason. Reference a variable with double curly braces in your action.",
               "data": {
                 "notify_action": "Action"
               }
@@ -455,11 +544,11 @@
     },
     "reset": {
       "name": "Reset",
-      "description": "Clear an escalated guard back to normal and re-check it. If the device is still unhealthy the guard tries to recover again; if it has recovered it simply resumes watching."
+      "description": "Clear an escalated guard back to normal and re-check it. If the monitored device is still unhealthy the guard tries to recover again; if it has recovered it simply resumes watching."
     },
     "snooze": {
       "name": "Snooze",
-      "description": "Temporarily suspend a guard for a set duration — it ignores the device's health and raises no alerts (e.g. during planned maintenance), then resumes automatically.",
+      "description": "Temporarily suspend a guard for a set duration — it ignores the monitored device's health and raises no alerts (e.g. during planned maintenance), then resumes automatically.",
       "fields": {
         "duration": {
           "name": "Duration",
@@ -477,23 +566,23 @@
       "fields": {
         "message": {
           "name": "Message",
-          "description": "The text to send. Exposed to the notify action as the message and event_text variables; the guard name is the title."
+          "description": "The text to send. Exposed to the notify action as the `message` and `event_text` variables; the guard name is the title."
         },
         "event": {
           "name": "Event key",
-          "description": "Optional routing key exposed as the event variable (default: custom), so your notify action can branch on it."
+          "description": "Optional routing key exposed as the `event` variable (default: `custom`), so your notify action can branch on it."
         },
         "event_text": {
           "name": "Event text",
-          "description": "Optional name-less text exposed as event_text (defaults to the message) — for titles/TTS that set the name separately."
+          "description": "Optional name-less text exposed as `event_text` (defaults to the message) — for titles/TTS that set the name separately."
         },
         "attempt": {
           "name": "Attempt",
-          "description": "Optional attempt count exposed as attempt; also derives the plural-correct attempts phrase."
+          "description": "Optional attempt count exposed as `attempt`; also derives the plural-correct `attempts` phrase."
         },
         "max": {
           "name": "Max attempts",
-          "description": "Optional attempt limit exposed as max."
+          "description": "Optional attempt limit exposed as `max`."
         }
       }
     },
@@ -513,29 +602,29 @@
     },
     "check_health": {
       "name": "Check health",
-      "description": "Evaluate a guard's health right now and return it (ok / unhealthy / unknown) — for a recovery script to re-use the guard's own health-check instead of rebuilding it.",
+      "description": "Evaluate a guard's health right now and return it (`ok` / `unhealthy` / `unknown`) — for a recovery script to re-use the guard's own Health Check instead of rebuilding it.",
       "fields": {
         "guard": {
           "name": "Guard",
-          "description": "The guard's status entity — the value a recovery action receives as guard_entity_id."
+          "description": "The guard's status entity — the value a recovery action receives as `guard_entity_id`."
         }
       }
     },
     "wait_for_health": {
       "name": "Wait for health",
-      "description": "Wait until a guard reports healthy again, or the timeout elapses. Returns health, timed_out and waited_s — so a staged recovery can verify between tiers using the guard's own health-check.",
+      "description": "Wait until a guard reports healthy again, or the timeout elapses. Returns `health`, `timed_out` and `waited_s` — so a staged recovery can verify between tiers using the guard's own Health Check.",
       "fields": {
         "guard": {
           "name": "Guard",
-          "description": "The guard's status entity — the value a recovery action receives as guard_entity_id."
+          "description": "The guard's status entity — the value a recovery action receives as `guard_entity_id`."
         },
         "timeout": {
           "name": "Timeout",
-          "description": "Seconds to wait for health to read OK. Defaults to the guard's boot window."
+          "description": "Seconds to wait for health to read `OK`. Defaults to the guard's boot window."
         },
         "check_first": {
           "name": "Check first",
-          "description": "Evaluate once before waiting and return immediately if already healthy (default: on)."
+          "description": "Evaluate once before waiting and return immediately if already healthy (default: `on`)."
         }
       }
     }

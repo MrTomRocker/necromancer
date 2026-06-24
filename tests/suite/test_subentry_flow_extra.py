@@ -59,11 +59,7 @@ async def _to_strategy(
     return await _cfg(
         hass,
         result["flow_id"],
-        {
-            "name": name,
-            "assigned_device": assigned_device,
-            "state_check": STATE_HEALTH,
-        },
+        {"name": name, **STATE_HEALTH, **assigned_device},
     )
 
 
@@ -223,7 +219,7 @@ async def test_reconfigure_renames_same_subentry(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"name": "Renamed", "assigned_device": {}, "state_check": STATE_HEALTH},
+        {"name": "Renamed", **STATE_HEALTH},
     )
     assert result["step_id"] == "strategy"
 
@@ -265,11 +261,7 @@ async def test_no_self_link_rejected(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {
-            "name": "Linker",
-            "assigned_device": {"device_id": own_device.id},
-            "state_check": STATE_HEALTH,
-        },
+        {"name": "Linker", **STATE_HEALTH, "device_id": own_device.id},
     )
     assert result["step_id"] == "device"
     assert result["errors"] == {"device_id": "no_self_link"}

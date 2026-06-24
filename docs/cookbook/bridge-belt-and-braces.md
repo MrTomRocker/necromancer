@@ -2,7 +2,7 @@
 
 > Catch a flaky Zigbee/Hue bridge whether it goes silent on the network *or* stops driving its lights — and reboot its PoE port exactly once, no matter which alarm trips first.
 
-**Concepts shown:** template guard · count/fuzzy health · linked guards · run an action · `repair_poe_port` service · integration reload · health-check verify
+**Concepts shown:** template guard · count/fuzzy health · linked guards · run an action · `repair_poe_port` service · integration reload · Health Check verify
 **Use it for:** Hue / Zigbee / Z-Wave bridges and hubs — any device worth detecting two independent ways.
 
 ## The problem
@@ -21,7 +21,7 @@ want two detectors and one reboot. That's exactly what [linked guards](../../REA
 Both guards target the same bridge and share an identical recovery. They differ only in how they
 decide the bridge is sick.
 
-**Guard A — network ping** (template health source):
+**Guard A — network ping** (template Health Source):
 
 ```jinja
 {{ is_state('binary_sensor.hue_bridge_ping', 'on') }}
@@ -123,7 +123,7 @@ Swap in your own values:
 
 - **`continue_on_timeout: true` matters.** Without it, a slow bridge that misses the 120 s
   `wait_template` aborts the rest of the recovery, so the config-entry reload never runs. Keep it
-  true, then let the `boot_window` + health-check decide success.
+  true, then let the `boot_window` + Health Check decide success.
 - **Debounce long, not short.** 480 s is intentional — rebooting a bridge knocks out every light it
   owns, so you only want it on a genuinely stuck box, not a 30 s blip. Don't drop this to seconds.
 - **Same recovery on both guards.** Linking coordinates *who acts*; it doesn't share the action.

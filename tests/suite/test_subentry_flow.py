@@ -44,7 +44,7 @@ async def test_create_switch_guard(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"name": "Switch Guard", "assigned_device": {}, "state_check": STATE_HEALTH},
+        {"name": "Switch Guard", **STATE_HEALTH},
     )
     assert result["step_id"] == "strategy"
 
@@ -87,7 +87,7 @@ async def test_strategy_step_lists_options(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"name": "Opt Guard", "assigned_device": {}, "state_check": STATE_HEALTH},
+        {"name": "Opt Guard", **STATE_HEALTH},
     )
     assert result["step_id"] == "strategy"
     schema = result["data_schema"].schema
@@ -112,7 +112,7 @@ async def test_notify_strategy_routes_to_notify_step(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"name": "Notify Guard", "assigned_device": {}, "state_check": STATE_HEALTH},
+        {"name": "Notify Guard", **STATE_HEALTH},
     )
     result = await _cfg(hass, result["flow_id"], {"strategy": "notify"})
     assert result["step_id"] == "notify"
@@ -130,7 +130,7 @@ async def test_duplicate_name_rejected(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"name": "Existing", "assigned_device": {}, "state_check": STATE_HEALTH},
+        {"name": "Existing", **STATE_HEALTH},
     )
     assert result["step_id"] == "device"
     assert result["errors"] == {"name": "duplicate_name"}
@@ -152,11 +152,7 @@ async def test_broken_template_rejected(
         await _cfg(
             hass,
             result["flow_id"],
-            {
-                "name": "Bad Jinja",
-                "assigned_device": {},
-                "template_check": {"template": "{{ 1 + }}"},
-            },
+            {"name": "Bad Jinja", "template": "{{ 1 + }}"},
         )
 
 
@@ -171,7 +167,7 @@ async def test_empty_action_rejected(
     result = await _cfg(
         hass,
         result["flow_id"],
-        {"name": "Empty Action", "assigned_device": {}, "state_check": STATE_HEALTH},
+        {"name": "Empty Action", **STATE_HEALTH},
     )
     result = await _cfg(hass, result["flow_id"], {"strategy": "action"})
     assert result["step_id"] == "action"

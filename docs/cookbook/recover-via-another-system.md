@@ -2,7 +2,7 @@
 
 > Restart a device Home Assistant can't touch directly by telling some *other* system to do it — and verify the fix from a health signal HA *can* see.
 
-**Concepts shown:** template guard · run an action · cross-system action (MQTT / REST / SSH / webhook) · health-check verify
+**Concepts shown:** template guard · run an action · cross-system action (MQTT / REST / SSH / webhook) · Health Check verify
 **Use it for:** devices HA can't restart directly — recovered by poking whatever can.
 
 ## The problem
@@ -18,11 +18,11 @@ something," then watches its own entities to confirm the bridge actually came ba
 
 ## The guard
 
-A template health source that fails when the bridge's entities go to no-value, paired with
+A template Health Source that fails when the bridge's entities go to no-value, paired with
 an [`action_call`](../../README.md#recovery-strategies) recovery that publishes the restart
 command and then waits for health to return.
 
-Health (template — guard is *healthy* when this renders truthy):
+Health Template (guard is *healthy* when this renders `true`):
 
 ```jinja
 {{ has_value('sensor.boiler_setpoint') }}
@@ -103,7 +103,7 @@ and swap the middle step for whatever your device responds to:
   service that owns the device.
 - **A different broker / topic.** Change the `topic` and `payload` to whatever your system
   subscribes to. Other systems often want JSON — `payload: '{"cmd":"restart"}'`.
-- **The health signal.** Point both the [health source](../../README.md#health-sources) and
+- **The health signal.** Point both the [Health Source](../../README.md#health-sources) and
   the `wait_template` at whatever entity goes stale when *your* device dies — a setpoint, a
   last-seen timestamp, a ping sensor. Always pair the action with a health signal so the
   verify step can confirm the device really came back.
@@ -112,8 +112,8 @@ and swap the middle step for whatever your device responds to:
 
 - **`continue_on_timeout: true` matters.** Without it, a slow restart that misses the
   `wait_template` timeout aborts the recovery early. Keep it true and let the `boot_window`
-  plus health-check decide success — that's what counts the attempt, not the wait.
-- **Fire-and-forget vs. health-check.** With the health-check toggle off, an `action_call`
+  plus Health Check decide success — that's what counts the attempt, not the wait.
+- **Fire-and-forget vs. Health Check.** With the Health Check toggle off, an `action_call`
   runs once and trusts it worked. With it on (the default — the `wait_template` + boot-window
   verify above), you get retries and honest success/failure. Keep it on whenever you can
   observe the device.

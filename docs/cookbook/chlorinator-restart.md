@@ -3,7 +3,7 @@
 > A salt-water chlorinator reports "on" yet its output has collapsed to zero — power-cycle it
 > automatically, but only once you're sure it has *really* stalled.
 
-**Concepts shown:** template guard · semantic health (with a guard condition) · off/on actions (switch power-cycle) · smoothed/median input · health-check verify · long cooldown
+**Concepts shown:** template guard · semantic health (with a guard condition) · off/on actions (switch power-cycle) · smoothed/median input · Health Check verify · long cooldown
 **Use it for:** salt chlorinators, pool pumps, heaters — "on but not producing", fixed by a power-cycle.
 
 ## The problem
@@ -44,7 +44,7 @@ Timing — deliberately patient for a chemical/hardware process:
 
 ```yaml
 debounce: 600       # 10 min of sustained stall before acting
-boot_window: 180    # wait for production to climb back over 10 (health-check)
+boot_window: 180    # wait for production to climb back over 10 (Health Check)
 cooldown: 1800      # 30 min settle after a successful restart
 max_attempts: 2
 ```
@@ -102,4 +102,4 @@ and verify production resumed.
   health so the guard doesn't power-cycle a cell that can't produce for a *chemical* reason — that
   needs a human, not a restart.
 
-See also: [Health sources](../../README.md#health-sources) · [Recovery strategies](../../README.md#recovery-strategies) · [Timing & behaviour](../../README.md#timing--behaviour)
+See also: [Health Sources](../../README.md#health-sources) · [Recovery strategies](../../README.md#recovery-strategies) · [Timing & behaviour](../../README.md#timing--behaviour)

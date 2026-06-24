@@ -1,8 +1,8 @@
 # Staged recovery, verified by the guard itself
 
-> Do the gentle fix, ask the guard "are you healthy yet?", and only escalate to the hard fix if it isn't — re-using the guard's own health-check instead of rebuilding it in the script.
+> Do the gentle fix, ask the guard "are you healthy yet?", and only escalate to the hard fix if it isn't — re-using the guard's own Health Check instead of rebuilding it in the script.
 
-**Concepts shown:** run an action · staged recovery (`if/then`) · `necromancer.wait_for_health` / `check_health` · re-use the guard's health-check · `repair_poe_port` · progress notify · one parametrized script for many guards
+**Concepts shown:** run an action · staged recovery (`if/then`) · `necromancer.wait_for_health` / `check_health` · re-use the guard's Health Check · `repair_poe_port` · progress notify · one parametrized script for many guards
 **Use it for:** bridges/hubs and the devices behind them — anything where you want a soft try before a power-cycle, and you've already told Necromancer what "healthy" means.
 
 ## The problem
@@ -10,7 +10,7 @@
 A two-stage recovery has to know, *between* the stages, whether the gentle fix worked. The
 obvious way is a `wait_template` that re-checks the device (see
 [Escalating recovery](escalating-recovery.md)) — but now "is it healthy?" lives in **two**
-places: the guard's health source *and* the script's `wait_template`. They drift. Change the
+places: the guard's Health Source *and* the script's `wait_template`. They drift. Change the
 health definition and the script still checks the old thing — and `wait_template` +
 `continue_on_timeout` is easy to get subtly wrong.
 
@@ -27,7 +27,7 @@ services re-use the guard's own verdict — you pass the guard's status entity, 
 The guard watches a device behind a bridge; the bridge hangs sometimes and the device drops.
 Strategy: **Run an action** (`action_call`) pointing at one reusable script.
 
-Health (template — whatever "this device is alive" means to you):
+Health Template (whatever "this device is alive" means to you):
 
 ```jinja
 {{ has_value('cover.patio_awning') }}
@@ -84,7 +84,7 @@ up to `boot_window` for health and counts / retries / escalates as always. So th
 ## Why this beats a rebuilt `wait_template`
 
 - **One definition of healthy.** The script never restates "is it alive?" — it asks the guard,
-  which uses your health source. Change the health template once; the script follows.
+  which uses your Health Source. Change the Health Template once; the script follows.
 - **`timed_out` is the tier gate.** No `continue_on_timeout` footgun: `wait_for_health` always
   returns, and `t1.timed_out` is a clean "the gentle fix didn't take".
 - **Short tier 1, full tier 2.** Give tier 1 a small `timeout` (just to decide); leave tier 2
@@ -102,7 +102,7 @@ device, reuse the script — no per-guard recovery logic to copy.
 ## Gotchas & variations
 
 - **Pass `{{ guard_entity_id }}`, not a hard-coded entity.** It's injected into every recovery
-  action; that's what makes the script reusable *and* points the health-check at the right guard.
+  action; that's what makes the script reusable *and* points the Health Check at the right guard.
 - **`check_health` for an instant branch.** When you don't need to wait — "skip tier 2 if some
   condition says don't" — call `check_health` and branch on its `health` immediately, no wait.
 - **Don't ping everything.** Some devices misbehave when polled (a tubular-motor cover jogs on a
@@ -110,5 +110,5 @@ device, reuse the script — no per-guard recovery logic to copy.
 - **Tier 2 can be anything.** `repair_poe_port`, `hassio.addon_restart`, a `shell_command`/SSH —
   the shape is the same: heavy action → `wait_for_health` (default boot window) → let
   Necromancer's VERIFY own the final verdict.
-- **The recovery still needs a health-check on.** `wait_for_health` reads the guard's health; keep
-  the guard's own *health-check* toggle on so Necromancer's VERIFY agrees with the script.
+- **The recovery still needs a Health Check on.** `wait_for_health` reads the guard's health; keep
+  the guard's own *Health Check* toggle on so Necromancer's VERIFY agrees with the script.

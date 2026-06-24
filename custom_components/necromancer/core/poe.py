@@ -131,10 +131,23 @@ class PoeFabric:
 
     # ---------- resolution ----------
     def _port_id(self, port: dict) -> str | None:
-        """Read a port's current id (static, or from its id-entity)."""
-        if static := port.get(CONF_ID_STATIC):
-            return static
+        """Read a port's current id (static, or from its id-entity).
+
+        A port gives its id ONE way. If it has both a static value and an
+        id-entity it is misconfigured — ignore it (return None, so it matches no
+        guard and the guard blocks) and warn, rather than silently picking one.
+        """
+        static = port.get(CONF_ID_STATIC)
         entity_id = port.get(CONF_ID_ENTITY)
+        if static and entity_id:
+            LOGGER.warning(
+                "PoE port %r is misconfigured: both a fixed id and an id-entity set "
+                "— ignoring it; remove one",
+                port.get(CONF_LABEL),
+            )
+            return None
+        if static:
+            return static
         if not entity_id:
             return None
         state = self.hass.states.get(entity_id)

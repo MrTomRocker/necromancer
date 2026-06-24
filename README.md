@@ -34,7 +34,7 @@ vendor-agnostic, as an orchestrator on top of the entities you already have.
 ---
 
 **Start here:** [Why Necromancer?](#why-necromancer) · [Features](#features) · [Installation](#installation) · [Getting started](#getting-started)
-**Understand it:** [How it works](#how-it-works) · [Health sources](#health-sources) · [Recovery strategies](#recovery-strategies) · [Timing & behaviour](#timing--behaviour) · [What you get](#what-you-get-per-guarded-device)
+**Understand it:** [How it works](#how-it-works) · [Health Sources](#health-sources) · [Recovery strategies](#recovery-strategies) · [Timing & behaviour](#timing--behaviour) · [What you get](#what-you-get-per-guarded-device)
 **Go deeper:** [Linked guards](#linked-guards-groups) · [Supervisor guards](#supervisor-guards-watch-other-guards) · [PoE ports](#poe-ports) · [Notifications](#notifications) · [Services](#services)
 **Use & support:** [Cookbook](#cookbook) · [FAQ](#faq) · [Architecture](#architecture--internals) · [Contributing](#contributing) · [License](#license)
 
@@ -91,7 +91,7 @@ plug, a PoE camera or a cloud bridge — all guarded with the *same* model (heal
 
 🔎 **Detect — is it broken?**
 
-- 🩺 **Two health sources** — any entity's state/attribute, or an inline **Jinja template** (e.g. *"online but drawing 0 W"*). Ambiguous readings (`unknown`/`unavailable`, render errors) count as *unknown*, never a fault.
+- 🩺 **Two Health Sources** — any entity's state/attribute, or an inline **Jinja template** (e.g. *"online but drawing 0 W"*). Ambiguous readings (`unknown`/`unavailable`, render errors) count as *unknown*, never a fault.
 
 🛠 **Recover — fix it**
 
@@ -113,7 +113,7 @@ plug, a PoE camera or a cloud bridge — all guarded with the *same* model (heal
 ⚙️ **Operate & integrate**
 
 - 🎛️ **Full operator surface** — per-guard status & health entities, a revive button, an arm/disarm switch, and recovery `event`s for dashboards and automations.
-- 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard` / `check_health` / `wait_for_health`, callable from any automation or script (snooze everything before a mass reboot, cycle a PoE port on demand, or let a recovery script re-use a guard's health-check).
+- 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard` / `check_health` / `wait_for_health`, callable from any automation or script (snooze everything before a mass reboot, cycle a PoE port on demand, or let a recovery script re-use a guard's Health Check).
 - 😴 **Maintenance mode** — `snooze` one guard or `snooze_all` before planned work; they go quiet and auto-resume.
 - 🧰 **Wizard-built & reconfigurable** — create and edit guards entirely in the UI; no YAML to hand-write.
 - 🏠 **Local & dependency-free** — no cloud, no extra Python packages; it orchestrates the entities you already have, and its verdicts (escalated, snooze) survive a restart.
@@ -162,7 +162,7 @@ watched.
 1. Go to **Settings → Devices & Services**, click **+ Add Integration** and search for
    **Necromancer**. Confirm — it's added with no devices yet.
 2. On the Necromancer entry, click **Add device** to create a guard. The wizard walks you through:
-   **health source → device & check → what to do (notify-only or a recovery strategy) → its settings**.
+   **Health Source → device & check → what to do (notify-only or a recovery strategy) → its settings**.
 
 <div align="center">
   <img width="480px" alt="Add a guarded device" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/add_device.png">
@@ -184,7 +184,7 @@ Everything is built on one idea:
 
 > **A guard pairs one health signal with one recovery and runs both through a fixed lifecycle.**
 
-The health source — an entity's state or a Jinja template — is evaluated continuously, so the
+The Health Source — an entity's state or a Jinja template — is evaluated continuously, so the
 *same* check that detects a fault also confirms the fix. The recovery is whatever you choose.
 Around that, the engine runs a deliberately conservative lifecycle:
 
@@ -203,7 +203,7 @@ stateDiagram-v2
     SUSPECT --> OK: recovers within debounce (blip)
     SUSPECT --> ESCALATED: auto-recovery off
     SUSPECT --> RECOVERING: still faulty after debounce
-    RECOVERING --> VERIFY: action ran (health-check)
+    RECOVERING --> VERIFY: action ran (Health Check)
     RECOVERING --> COOLDOWN: action ran (fire-and-forget)
     RECOVERING --> ESCALATED: recovery blocked (missing target)
     VERIFY --> COOLDOWN: healthy within boot window
@@ -218,14 +218,14 @@ Two guarantees fall out of this design:
 
 - **No false alarm.** Ambiguous health — a missing entity, a render error, `unknown`/`unavailable`
   — is treated as *unknown*, never as a fault. Nothing is ever cycled on a hunch.
-- **No false success.** With the health-check on, a recovery is only "done" once health verifies OK
+- **No false success.** With the Health Check on, a recovery is only "done" once health verifies OK
   again; an action that ran but didn't fix anything is a failed attempt, not a success.
 
 State that matters across a Home Assistant restart — the escalation verdict, attempt counters,
 recovery stats and the per-guard auto-recovery switch — is **persisted** independently of the
 display entities.
 
-## Health sources
+## Health Sources
 
 How a guard decides whether a device is alive. Both are continuous, checkable expressions, so the
 verify step always works:
@@ -233,7 +233,7 @@ verify step always works:
 | Source | What it is | Healthy when |
 |---|---|---|
 | **State-based** | one entity's state or attribute, compared to on/off value lists | the value is in the *on* list (e.g. a ping / reachability sensor reads `on`) |
-| **Template-based** | an inline Jinja template returning `true`/`false` | the template renders truthy |
+| **Template-based** | an inline Jinja template returning `true`/`false` | the template renders `true`/`on`/`1`/`yes` (anything else — `false`/`off`/`0`/`no` is faulty, the rest is *unknown*) |
 
 By default `unavailable`/`unknown` count as *unknown* (no false alarm). If "the entity is gone"
 *is* the failure you want to act on, list `unavailable` in the **off** values — then it triggers
@@ -251,9 +251,9 @@ Pick the shape that fits the device:
 | **Power-cycle a switch** | turn a switch off → wait → on (e.g. a smart plug) |
 | **Run an action** | one action sequence — script, service, SSH, webhook, … |
 | **Off/on actions** | an *off* action → wait → an *on* action |
-| **Auto-PoE** | resolve the device to its PoE port and power-cycle it, with a staged verify (the port goes offline → comes back) on top of the device health-check (when its toggle is on). It **remembers** the port while the device is healthy, so it can still recover a device that has already dropped off the switch and aged out of the neighbour table |
+| **Auto-PoE** | resolve the device to its PoE port and power-cycle it, with a staged verify (the port goes offline → comes back) on top of the device Health Check (when its toggle is on). It **remembers** the port while the device is healthy, so it can still recover a device that has already dropped off the switch and aged out of the neighbour table |
 
-Every recovery has a **health-check** toggle (on by default). With it on, Necromancer waits until the
+Every recovery has a **Health Check** toggle (on by default). With it on, Necromancer waits until the
 device reports healthy again before declaring success — the boot window and retries below apply. Turn
 it off for **fire-and-forget**: the action runs once and success is assumed (continuous monitoring
 re-triggers if it didn't take). The toggle and its two numbers sit in the *Behaviour* section.
@@ -289,7 +289,7 @@ the collapsed *Behaviour* section of the wizard.
 | **Debounce** | 120 s | How long a fault must persist before recovery starts. Absorbs short blips. |
 | **Boot window** | 180 s | How long to wait for the device to report healthy again after the recovery action, before counting the attempt as failed. Set it to the slowest your device takes to come back. |
 | **Cooldown** | 600 s | The pause after a *successful* recovery before the guard returns to `ok`. Prevents tight loops; if the device is still (or again) faulty when the cooldown elapses, the guard re-enters `suspect` (debounce) rather than looping straight back into recovery. |
-| **Max attempts** | 2 | How many times to retry before escalating. (Applies when the health-check is on; with it off the action runs once, fire-and-forget.) |
+| **Max attempts** | 2 | How many times to retry before escalating. (Applies when the Health Check is on; with it off the action runs once, fire-and-forget.) |
 
 A few consequences worth knowing:
 
@@ -447,23 +447,24 @@ Every port also fires a `necromancer_poe_port` bus event on each status change �
 with status `good` / `recovering` / `failed` — handy to drive a per-port indicator or to alert when
 a cycle fails.
 
-### Identifying the right port — fixed vs. dynamic
+### Identifying the right port — static vs. dynamic
 
 A PoE guard has a **Device id (e.g. MAC, IP or name)** field; Necromancer power-cycles the one port
-whose id matches it. You wire this up in one of two ways, depending on whether your switch can report
-what's plugged into each port.
+whose id matches it. A port reports its id **one way** — from an entity *or* a static label, never
+both (setting both is rejected). You wire this up in one of two ways, depending on whether your switch
+can report what's plugged into each port.
 
-#### Fixed / statically assigned ports
+#### Static / statically assigned ports
 
 Use this when the switch *can't* tell you what's connected — an unmanaged switch, or one with no
 LLDP/neighbour data (e.g. a TP-Link SG108E). You pin the mapping by hand:
 
-- On the **port**, leave *"Entity with the connected device"* empty and put a label in
-  *"Or a fixed value (if there's no entity)"* — e.g. `hue-bridge`.
+- On the **port**, leave *"Entity reporting the id"* empty and put a value in *"Static label"* —
+  e.g. `hue-bridge`.
 - On the **PoE guard**, set **Device id** to the same value: `hue-bridge`.
 
 The match never changes — but it is *physical*: if you re-patch the device to another port, update the
-fixed value yourself.
+static label yourself.
 
 #### Dynamic / auto-discovery
 
@@ -471,7 +472,7 @@ Use this when the switch reports each port's neighbour (MAC, IP or hostname via 
 managed switch surfaced through Node-RED). Necromancer resolves the port at runtime, so moving a device
 between ports just works:
 
-- On the **port**, set *"Entity with the connected device"* to that port's neighbour sensor (e.g.
+- On the **port**, set *"Entity reporting the id"* to that port's neighbour sensor (e.g.
   `sensor.poe_switch_port_1_neighbours`) and *"Attribute of that entity"* to the field that carries the
   id (e.g. `mac` or `ip`; leave empty to use the entity's state).
 - On the **PoE guard**, set **Device id** to your device's value — for example:
@@ -586,7 +587,7 @@ device, or a whole area (bulk). Recovering *now* and arming auto-recovery stay t
 | `necromancer.snooze_all` | **Maintenance mode for everything** — snooze *every* guard for a `duration` (no target needed), then they all auto-resume. Guards mid-recovery are skipped (best-effort, logged). Handy as a one-tap dashboard button before a disruptive change. |
 | `necromancer.unsnooze_all` | Resume every snoozed guard at once. |
 | `necromancer.repair_poe_port` | Resolve a device `id` (MAC / IP / static label) to its PoE port and power-cycle it. It blocks until done and **coalesces per port** — concurrent callers join the one in-flight cycle instead of each cycling the port. This is the exact primitive Auto-PoE uses — call it from your own actions or automations when you want "reboot whatever is on this device's port". |
-| `necromancer.check_health` | **Evaluate a guard's health right now** and get it back (`{health: ok / unhealthy / unknown}`). Pass the guard's status entity as `guard` — typically `{{ guard_entity_id }}` inside a recovery action — and read `response_variable`. For a recovery script that wants to branch on the guard's *own* health-check instead of rebuilding it. |
+| `necromancer.check_health` | **Evaluate a guard's health right now** and get it back (`{health: ok / unhealthy / unknown}`). Pass the guard's status entity as `guard` — typically `{{ guard_entity_id }}` inside a recovery action — and read `response_variable`. For a recovery script that wants to branch on the guard's *own* Health Check instead of rebuilding it. |
 | `necromancer.wait_for_health` | **Wait until a guard reads healthy again** (or a `timeout`, default = the guard's boot window), returning `{health, timed_out, waited_s}`. Lets a *staged* recovery verify between tiers with the guard's definition of healthy: gentle fix → `wait_for_health` → `if timed_out`, escalate to the hard fix. `check_first` (default on) returns at once if it's already healthy. See [Staged recovery, verified by the guard itself](docs/cookbook/verified-staged-recovery.md). |
 
 ## Cookbook
@@ -600,21 +601,21 @@ Real guards from a live deployment — each a step-by-step recipe under [`docs/c
 | [Catch a device that's online but idle](docs/cookbook/inverter-sun-check.md) | Alert when a device is reachable but producing nothing — "is it doing its job?" | semantic health · notify-only | inverters, pumps, heat pumps |
 | [Restart a stalled chlorinator](docs/cookbook/chlorinator-restart.md) | Same semantic health, but with an automatic power-cycle + verify | semantic health · power-cycle + verify · smoothed input | chlorinators, pool pumps, heaters |
 | [Restart a pump, restore its interlocked device](docs/cookbook/pool-pump-restart.md) | Power-cycle a stalled pump and put the chlorinator back — carrying state across the off→on cycle | off/on actions · off→on variable carry · conditional restore · semantic health | pumps & devices behind a safety interlock |
-| [Alert when a Node-RED flow stalls](docs/cookbook/nodered-heartbeat.md) | Watch data freshness (`last_reported`); notify, or auto-redeploy with a health-check | freshness watchdog (`last_reported`) · notify or auto-redeploy | Node-RED flows, scrape / MQTT feeds |
-| [Escalating recovery](docs/cookbook/escalating-recovery.md) | Graceful restart first, then a sledgehammer (kill-button / add-on restart) if it didn't take | `if/then` escalation · soft→hard restart · health-check | containers, add-ons, services |
-| [Staged recovery, verified by the guard itself](docs/cookbook/verified-staged-recovery.md) | Gentle fix → ask the guard "healthy yet?" → escalate only if not, re-using the guard's own health-check | `check_health` / `wait_for_health` · staged `if/then` · one script for many guards | bridges/hubs + the devices behind them |
-| [Recover by poking another system](docs/cookbook/recover-via-another-system.md) | Restart via MQTT / REST / SSH / webhook when HA can't do it directly, verified by health | `action_call` · MQTT / REST / SSH · health-check | devices HA can't restart directly |
+| [Alert when a Node-RED flow stalls](docs/cookbook/nodered-heartbeat.md) | Watch data freshness (`last_reported`); notify, or auto-redeploy with a Health Check | freshness watchdog (`last_reported`) · notify or auto-redeploy | Node-RED flows, scrape / MQTT feeds |
+| [Escalating recovery](docs/cookbook/escalating-recovery.md) | Graceful restart first, then a sledgehammer (kill-button / add-on restart) if it didn't take | `if/then` escalation · soft→hard restart · Health Check | containers, add-ons, services |
+| [Staged recovery, verified by the guard itself](docs/cookbook/verified-staged-recovery.md) | Gentle fix → ask the guard "healthy yet?" → escalate only if not, re-using the guard's own Health Check | `check_health` / `wait_for_health` · staged `if/then` · one script for many guards | bridges/hubs + the devices behind them |
+| [Recover by poking another system](docs/cookbook/recover-via-another-system.md) | Restart via MQTT / REST / SSH / webhook when HA can't do it directly, verified by health | `action_call` · MQTT / REST / SSH · Health Check | devices HA can't restart directly |
 | [One notification script for every guard](docs/cookbook/notification-fanout.md) | Centralize routing once — time-aware, multi-channel — instead of per-guard config | central notify fanout · time-aware routing | any multi-guard setup |
 
 ## FAQ
 
 **Why didn't my guard react when the device went offline?**
-Either the health source read *unknown* rather than *faulty* (commonly: the entity went
+Either the Health Source read *unknown* rather than *faulty* (commonly: the entity went
 `unavailable` and you didn't list `unavailable` as an off-value), or the outage was shorter than the
 debounce window. Necromancer acts only on a confirmed, sustained fault.
 
 **Why is the status still `recovering`/`verify` long after the action ran?**
-With a health-check, the guard waits up to the boot window for the device to report healthy again.
+With a Health Check, the guard waits up to the boot window for the device to report healthy again.
 A device that boots slowly (a bridge can take minutes before its API and entities return) keeps the
 guard in `verify` until it's genuinely back — that's the "no false success" guarantee at work.
 Raise the boot window if your device needs longer.
@@ -635,7 +636,7 @@ when a linked partner is repairing the shared cause.
 **Auto-PoE says it can't find the port.** Exactly one port must match the guard's device id. Zero
 matches (the device is gone *and* there's no learned/last-known port) or several matches both block
 recovery on purpose — nothing random gets power-cycled. Check that one port reports that MAC/IP, or
-pin it with a fixed id (see *Identifying the right port* above).
+pin it with a static label (see *Identifying the right port* above).
 
 **Disabling the device's entities to test it doesn't trigger anything.** A *disabled* entity reads
 `unknown`, not `unavailable`, so a template checking `unavailable` won't fire. Simulate a real
@@ -645,9 +646,9 @@ outage instead (cut power, unplug), or override the state — don't disable the 
 another recover guard to link to — so your very first guard has nothing to offer there. Add the
 second guard, then link them from either guard's **Reconfigure**.
 
-**When should I leave the health-check on?** Keep it on (the default) whenever the recovery can fail
+**When should I leave the Health Check on?** Keep it on (the default) whenever the recovery can fail
 *silently* — for example Auto-PoE/`repair_poe_port` with an id that might not resolve, or an action
-whose effect you can't otherwise confirm. With the health-check on, the guard only declares success
+whose effect you can't otherwise confirm. With the Health Check on, the guard only declares success
 once the device reports healthy again. Turn it off (fire-and-forget) only when the action is
 inherently reliable: success is then assumed, and continuous monitoring re-triggers if it didn't
 take — which can mean one premature "recovered" notification.

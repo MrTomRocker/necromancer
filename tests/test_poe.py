@@ -191,6 +191,17 @@ async def test_resolve_static_caseinsensitive(hass, _stubs):
     assert p is not None and p[CONF_LABEL] == "P1"
 
 
+async def test_port_with_both_id_sources_is_ignored(hass, _stubs):
+    hass.states.async_set("sensor.nb", "dev")
+    f = PoeFabric(hass)
+    # both a fixed id and an id-entity -> misconfigured -> ignored, matches nothing
+    f.set_ports(
+        [port("PX", "switch.a", "binary_sensor.s", id_static="dev", id_entity="sensor.nb")]
+    )
+    p, reason = f.resolve_with_reason("dev")
+    assert p is None and "no port matches" in reason, (p, reason)
+
+
 async def test_relearn_recable_updates_cache(hass, _stubs):
     hass.states.async_set("sensor.nb1", "x", {"mac": "aa:bb"})
     hass.states.async_set("sensor.nb2", "x", {})

@@ -3,7 +3,7 @@
 > Power-cycle a stalled device whose restart trips a safety interlock — then restore the dependent
 > device, but only if it was on before and only once it's safe again.
 
-**Concepts shown:** template guard · semantic health · off/on actions · off→on variable carry · conditional restore (`if/then`) · health-check verify
+**Concepts shown:** template guard · semantic health · off/on actions · off→on variable carry · conditional restore (`if/then`) · Health Check verify
 **Use it for:** pumps, compressors — anything behind a safety interlock where a dependent device must be put back exactly as it was after a restart.
 
 ## The problem
@@ -21,8 +21,8 @@ started?** That used to mean a helper `input_boolean`. Now the off action can ju
 
 ## The guard
 
-Health is the "is it doing its job?" pattern — unhealthy only when the pump is *demanded* but isn't
-producing:
+The Health Template is the "is it doing its job?" pattern — unhealthy only when the pump is
+*demanded* but isn't producing:
 
 ```jinja
 {{ not (is_state('switch.pool_pump','on')
@@ -62,7 +62,7 @@ makes this work without a helper entity.
 4. Wait `off_on_delay`, then the **on action:** turn the pump back on, give it 60 s to spin up and
    re-establish flow, then — *only* if the chlorinator was on before **and** `binary_sensor.pool_flow`
    now reads on — turn the chlorinator back on.
-5. With the health-check, Necromancer watches the same health template (up to the boot window) to
+5. With the Health Check, Necromancer watches the same Health Template (up to the boot window) to
    confirm the pump is producing again → **COOLDOWN** → **OK**.
 
 ## The clever bit
@@ -97,4 +97,4 @@ makes this work without a helper entity.
 - **Engine context too.** `attempt` and `max` are also available in both actions — e.g. settle
   longer on the second try.
 
-See also: [Health sources](../../README.md#health-sources) · [Recovery strategies](../../README.md#recovery-strategies) · [Timing & behaviour](../../README.md#timing--behaviour)
+See also: [Health Sources](../../README.md#health-sources) · [Recovery strategies](../../README.md#recovery-strategies) · [Timing & behaviour](../../README.md#timing--behaviour)

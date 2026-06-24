@@ -145,9 +145,6 @@ def _watch_fields(d: dict) -> dict:
 # like Device/Action don't render their own label). A section nests its fields'
 # values, so submitted input is flattened back up before use. Each key is also a
 # translation key: sections.<key>.name / .description.
-SECTION_STATE = "state_check"
-SECTION_TEMPLATE = "template_check"
-SECTION_DEVICE = "assigned_device"
 SECTION_LINK = "linked_guards"
 SECTION_BEHAVIOR = "behavior"
 SECTION_NOTIFY = "notification"
@@ -219,46 +216,35 @@ def _source_type_of(data: dict) -> str:
     return SOURCE_TEMPLATE if is_template else SOURCE_STATE
 
 
-def _health_section(d: dict, *, source_type: str, exclude: list[str]) -> dict:
-    """The state-detection block, depending on the chosen source type."""
+def _health_fields(d: dict, *, source_type: str, exclude: list[str]) -> dict:
+    """The state-detection fields (flat, no section), per the chosen source type."""
     if source_type == SOURCE_TEMPLATE:
-        return _section(
-            SECTION_TEMPLATE,
-            {
-                vol.Required(
-                    CONF_TEMPLATE, default=d.get(CONF_TEMPLATE, "")
-                ): selector.TemplateSelector()
-            },
-        )
-    return _section(
-        SECTION_STATE,
-        {
+        return {
             vol.Required(
-                CONF_ENTITY_ID, default=d.get(CONF_ENTITY_ID, vol.UNDEFINED)
-            ): _entity_selector(list(exclude)),
-            **_watch_fields(d),
-        },
-    )
+                CONF_TEMPLATE, default=d.get(CONF_TEMPLATE, "")
+            ): selector.TemplateSelector()
+        }
+    return {
+        vol.Required(
+            CONF_ENTITY_ID, default=d.get(CONF_ENTITY_ID, vol.UNDEFINED)
+        ): _entity_selector(list(exclude)),
+        **_watch_fields(d),
+    }
 
 
 def _device_schema(
     d: dict | None = None, *, source_type: str = SOURCE_STATE, exclude: list[str] = ()
 ) -> vol.Schema:
-    """Build the device step schema: name + health block + assigned device."""
+    """Build the device step schema: name + health fields + assigned device (flat)."""
     d = d or {}
     return vol.Schema(
         {
             vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): str,
-            **_health_section(d, source_type=source_type, exclude=list(exclude)),
-            **_section(
-                SECTION_DEVICE,
-                {
-                    vol.Optional(
-                        CONF_DEVICE_ID,
-                        description={"suggested_value": d.get(CONF_DEVICE_ID)},
-                    ): selector.DeviceSelector(),
-                },
-            ),
+            **_health_fields(d, source_type=source_type, exclude=list(exclude)),
+            vol.Optional(
+                CONF_DEVICE_ID,
+                description={"suggested_value": d.get(CONF_DEVICE_ID)},
+            ): selector.DeviceSelector(),
         }
     )
 
@@ -783,6 +769,20 @@ def _str_values(raw: object) -> list[str]:
     return [str(_yaml_value(v)).strip() for v in _as_list(raw)]
 
 
+def _validate_port_identity(port: dict) -> tuple[str, str] | None:
+    """Reject a port that identifies its device two ways at once.
+
+    A port's id comes from EITHER an entity (its state / a chosen attribute) OR a
+    typed-in value — never both. Returns (field, error_key) for the config flow,
+    or None when the identity is valid.
+    """
+    if port.get(CONF_ID_STATIC) and port.get(CONF_ID_ENTITY):
+        return CONF_ID_STATIC, "id_conflict"
+    if port.get(CONF_ID_ATTRIBUTE) and not port.get(CONF_ID_ENTITY):
+        return CONF_ID_ATTRIBUTE, "attribute_needs_entity"
+    return None
+
+
 def _normalize_imported_port(raw: object) -> dict:
     """Validate one imported port and return it in the stored shape.
 
@@ -828,6 +828,13 @@ def _normalize_imported_port(raw: object) -> dict:
         value = raw.get(key)
         if value not in (None, ""):
             port[key] = str(_yaml_value(value)).strip()
+    if conflict := _validate_port_identity(port):
+        if conflict[1] == "id_conflict":
+            raise ValueError(
+                f"port '{label}' identifies its device twice — use an entity or a "
+                "static label, not both"
+            )
+        raise ValueError(f"port '{label}' has an id attribute but no id entity")
     return port
 
 

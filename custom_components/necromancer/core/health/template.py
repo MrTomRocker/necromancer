@@ -7,8 +7,10 @@ a boolean template, e.g. `{{ states('sensor.cpu') | float(0) < 90 }}`.
 A template is a continuous expression, so unlike a trigger it can be checked any
 time: `evaluate()` renders it on demand (used for the recovery VERIFY step too),
 and `async_setup` tracks it so the engine re-evaluates whenever a referenced
-entity changes. `result_as_boolean` accepts on/off, true/false, 1/0, yes/no; an
-empty/unknown result or a render error is UNKNOWN (no false alarm).
+entity changes. Only a clear boolean is decisive — `true`/`on`/`1`/`yes` → OK,
+`false`/`off`/`0`/`no` → UNHEALTHY; anything else (a blank / `none` / `unknown` /
+`unavailable` result, or a render error) → UNKNOWN, so a mistyped template never
+triggers a recovery (no false alarm).
 """
 
 from __future__ import annotations
@@ -20,11 +22,12 @@ from homeassistant.helpers.event import (
     TrackTemplateResult,
     async_track_template_result,
 )
-from homeassistant.helpers.template import Template, result_as_boolean
+from homeassistant.helpers.template import Template
 
 from .base import Health, HealthSource
 
-_UNKNOWN_RESULTS = {"", "none", "unknown", "unavailable"}
+_HEALTHY_RESULTS = {"true", "on", "1", "yes"}
+_FAULTY_RESULTS = {"false", "off", "0", "no"}
 
 
 class TemplateHealth(HealthSource):
@@ -48,16 +51,23 @@ class TemplateHealth(HealthSource):
             return []
 
     def evaluate(self) -> Health:
-        """Render the template now and map it to OK / UNHEALTHY / UNKNOWN."""
+        """Render the template now and map it to OK / UNHEALTHY / UNKNOWN.
+
+        Whitelist only: `true`/`on`/`1`/`yes` → OK, `false`/`off`/`0`/`no` →
+        UNHEALTHY. Anything else (a blank / `none` / `unknown` / `unavailable`
+        result, or a render error) is UNKNOWN, so a mistyped template never
+        triggers a recovery.
+        """
         try:
             result = self._template.async_render(parse_result=True)
         except TemplateError:
             return Health.UNKNOWN
-        if result is None or (
-            isinstance(result, str) and result.strip().lower() in _UNKNOWN_RESULTS
-        ):
-            return Health.UNKNOWN
-        return Health.OK if result_as_boolean(result) else Health.UNHEALTHY
+        token = str(result).strip().lower()
+        if token in _HEALTHY_RESULTS:
+            return Health.OK
+        if token in _FAULTY_RESULTS:
+            return Health.UNHEALTHY
+        return Health.UNKNOWN
 
     async def async_setup(self, on_change: CALLBACK_TYPE) -> CALLBACK_TYPE | None:
         """Track the template and call `on_change` on any referenced change."""
