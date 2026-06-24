@@ -200,12 +200,16 @@ Around that, the engine runs a deliberately conservative lifecycle:
 stateDiagram-v2
     [*] --> OK
     OK --> SUSPECT: health turns faulty
+    OK --> BLIND: health unknown
     SUSPECT --> OK: recovers within debounce (blip)
+    SUSPECT --> BLIND: health unknown
     SUSPECT --> ESCALATED: auto-recovery off
     SUSPECT --> RECOVERING: still faulty after debounce
-    RECOVERING --> VERIFY: action ran (Health Check)
-    RECOVERING --> COOLDOWN: action ran (fire-and-forget)
-    RECOVERING --> ESCALATED: recovery blocked (missing target)
+    BLIND --> OK: health returns
+    BLIND --> SUSPECT: faulty again
+    RECOVERING --> VERIFY: action ran (Health Check on)
+    RECOVERING --> COOLDOWN: action ran ok (Health Check off)
+    RECOVERING --> ESCALATED: blocked, or driver reports failed
     VERIFY --> COOLDOWN: healthy within boot window
     VERIFY --> RECOVERING: retry (attempts left)
     VERIFY --> ESCALATED: out of attempts
