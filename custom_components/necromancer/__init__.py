@@ -529,3 +529,21 @@ async def async_unload_entry(
         if (fabric := hass.data.get(DOMAIN, {}).get("fabric")) is not None:
             fabric.shutdown()
     return unload_ok
+
+
+async def async_remove_entry(
+    hass: HomeAssistant, entry: NecromancerConfigEntry
+) -> None:
+    """Drop our config-health repair issues when the integration is removed.
+
+    Without this they would linger in Settings → Repairs until the next restart
+    (they are non-persistent), even though the guards they referred to are gone.
+    """
+    reg = ir.async_get(hass)
+    stale = [
+        iid
+        for (dom, iid), issue in reg.issues.items()
+        if dom == DOMAIN and issue.translation_key in _ISSUE_SEVERITY
+    ]
+    for iid in stale:
+        ir.async_delete_issue(hass, DOMAIN, iid)

@@ -20,7 +20,7 @@ from homeassistant.util import dt as dt_util
 
 from tests.common import async_fire_time_changed, async_test_home_assistant
 
-from custom_components.necromancer import _reconcile_issues
+from custom_components.necromancer import _reconcile_issues, async_remove_entry
 from custom_components.necromancer.core.drivers.base import RecoveryDriver
 from custom_components.necromancer.core.engine import DeviceEngine, GState
 from custom_components.necromancer.core.health.base import Health, HealthSource
@@ -943,6 +943,16 @@ async def test_reconcile_clears_issue_for_removed_guard(hass, _):
     _reconcile_issues(hass, {"g": eng}, fabric)
     assert ("necromancer", "g_health_entity_missing") in ir.async_get(hass).issues
     _reconcile_issues(hass, {}, fabric)  # subentry deleted -> no engines
+    assert ("necromancer", "g_health_entity_missing") not in ir.async_get(hass).issues
+
+
+async def test_remove_entry_clears_issues(hass, _):
+    # Deleting the whole integration must drop its repair issues immediately.
+    health = EntityStateHealth(hass, {"entity_id": "sensor.ghost3"})
+    eng = make(hass, health, StubDriver(hass))
+    _reconcile_issues(hass, {"g": eng}, PoeFabric(hass))
+    assert ("necromancer", "g_health_entity_missing") in ir.async_get(hass).issues
+    await async_remove_entry(hass, None)  # entry unused by the cleanup
     assert ("necromancer", "g_health_entity_missing") not in ir.async_get(hass).issues
 
 
