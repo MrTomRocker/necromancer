@@ -323,7 +323,7 @@ recover guards get all five, notify-only guards just the status sensor + health:
 
 | Entity | Purpose |
 |---|---|
-| `sensor.<guard>_status` | The lifecycle state: `ok` / `suspect` / `recovering` / `verify` / `cooldown` / `escalated` / `snoozed`. Attributes include `recover_count` / `fail_count`, `last_recover` / `last_fail`, the `recover_driver` and its last verdict, and `snooze_until`. |
+| `sensor.<guard>_status` | The lifecycle state: `ok` / `suspect` / `blind` / `recovering` / `verify` / `cooldown` / `escalated` / `snoozed`. Attributes include `recover_count` / `fail_count`, `last_recover` / `last_fail`, the `recover_driver` and its last verdict, and `snooze_until`. |
 | `binary_sensor.<guard>_health` | The raw health verdict from the HealthSource. |
 | `switch.<guard>_auto_recovery` | Arm/disarm automatic recovery for this guard (a configuration entity). |
 | `button.<guard>_revive` | Trigger a recovery cycle manually. |
@@ -350,6 +350,7 @@ lifecycle:
 |---|---|
 | `ok` | Healthy, watching. |
 | `suspect` | Unhealthy — waiting out the **debounce** before acting (filters blips). |
+| `blind` | Health **unknown** — the source is unavailable or its template errored, so the guard can't read the device. No recovery (unknown is never a fault); it returns to `ok` / `suspect` once health reads again. |
 | `recovering` | A recovery cycle is running (the driver is acting). |
 | `verify` | Recovery done — waiting (up to the **boot window**) for health to come back. |
 | `cooldown` | Recovered — a short pause before re-arming. |
@@ -445,7 +446,7 @@ flag on the `done` event — so your own automations can react to it.
 ## Supervisor guards (watch other guards)
 
 A guard's **template** health can reference **other guards'** own entities — their
-`sensor.<name>_status` (`ok` / `suspect` / `recovering` / `verify` / `cooldown` / `escalated` / `snoozed`) or
+`sensor.<name>_status` (`ok` / `suspect` / `blind` / `recovering` / `verify` / `cooldown` / `escalated` / `snoozed`) or
 `binary_sensor.<name>_health`. That lets you **stage** recovery: small per-device guards try the
 cheap fix first; a higher-level **supervisor guard** watches their status and triggers a bigger
 recovery once several have given up.

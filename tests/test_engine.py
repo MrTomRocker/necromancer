@@ -922,6 +922,54 @@ async def test_follower_success_notify_gated(hass, _):
     assert "recovery_success" in notified, notified
 
 
+async def test_ok_to_blind_on_unknown(hass, _):
+    # Health unknown while monitoring -> a distinct `blind` status (not a stale ok),
+    # and no recovery (unknown is never a fault).
+    health = FakeHealth(hass, Health.OK)
+    driver = StubDriver(hass)
+    eng = make(hass, health, driver)
+    await eng.async_start()
+    assert eng.state is GState.OK
+    health.verdict = Health.UNKNOWN
+    eng._evaluate()
+    assert eng.state is GState.BLIND
+    assert driver.calls == 0
+    await eng.async_stop()
+
+
+async def test_blind_back_to_ok_on_healthy(hass, _):
+    health = FakeHealth(hass, Health.UNKNOWN)
+    eng = make(hass, health, StubDriver(hass))
+    await eng.async_start()
+    assert eng.state is GState.BLIND  # starts blind: health unknown
+    health.verdict = Health.OK
+    eng._evaluate()
+    assert eng.state is GState.OK
+    await eng.async_stop()
+
+
+async def test_blind_to_suspect_on_unhealthy(hass, _):
+    health = FakeHealth(hass, Health.UNKNOWN)
+    eng = make(hass, health, StubDriver(hass))
+    await eng.async_start()
+    assert eng.state is GState.BLIND
+    health.verdict = Health.UNHEALTHY
+    eng._evaluate()
+    assert eng.state is GState.SUSPECT  # re-detected unhealthy -> debounce -> recovery
+    await eng.async_stop()
+
+
+async def test_unknown_during_recovery_holds(hass, _):
+    # Mid-recovery the device reads unknown (rebooting) -> hold, never blind.
+    health = FakeHealth(hass, Health.UNKNOWN)
+    eng = make(hass, health, StubDriver(hass))
+    await eng.async_start()
+    eng._set_state(GState.RECOVERING)
+    eng._evaluate()
+    assert eng.state is GState.RECOVERING
+    await eng.async_stop()
+
+
 async def test_reconcile_creates_and_clears_config_issue(hass, _):
     # A guard whose health entity doesn't exist -> blind -> a repair issue; once
     # the entity exists, re-reconciling clears it (self-healing on reload).

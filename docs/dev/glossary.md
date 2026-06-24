@@ -54,7 +54,7 @@ Translated like any HA entity/state (German users expect German names). Descript
 
 | Element | EN | DE |
 |---|---|---|
-| status `ok`/`suspect`/`recovering`/`verify`/`cooldown`/`escalated`/`snoozed` | OK / Suspect / Recovering / Verifying / Cooldown / Escalated / Snoozed | OK / Verdacht / Reparatur läuft / Prüfung / Abkühlphase / Eskaliert / Schlummert |
+| status `ok`/`suspect`/`blind`/`recovering`/`verify`/`cooldown`/`escalated`/`snoozed` | OK / Suspect / Blind / Recovering / Verifying / Cooldown / Escalated / Snoozed | OK / Verdacht / Blind / Reparatur läuft / Prüfung / Abkühlphase / Eskaliert / Schlummert |
 | switch (auto-recovery) | Auto-recovery | Auto-Reparatur |
 | button (manual) | Revive | Reparieren |
 | event (recovered) | Recovery | Wiederbelebung |

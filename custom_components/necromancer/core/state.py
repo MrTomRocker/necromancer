@@ -14,6 +14,10 @@ class GState(StrEnum):
 
     OK = "ok"
     SUSPECT = "suspect"
+    # Health is unknown (source unavailable / render error) while idly monitoring:
+    # the guard can't read the device, so it shows blind instead of a stale ok. No
+    # recovery is triggered (unknown is never a fault).
+    BLIND = "blind"
     RECOVERING = "recovering"
     VERIFY = "verify"
     COOLDOWN = "cooldown"

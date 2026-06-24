@@ -470,6 +470,7 @@
         "state": {
           "ok": "OK",
           "suspect": "Suspect",
+          "blind": "Blind",
           "recovering": "Recovering",
           "verify": "Verifying",
           "cooldown": "Cooldown",

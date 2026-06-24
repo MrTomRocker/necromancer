@@ -603,9 +603,21 @@ class DeviceEngine:
             for waiter in self._health_waiters:
                 waiter.set()
 
-        if self.state == GState.OK and h == Health.UNHEALTHY:
+        # Health unknown while idly monitoring (OK/SUSPECT/BLIND): show a distinct
+        # `blind` status instead of holding a stale ok — never a fault, so no
+        # recovery. RECOVERING/VERIFY/COOLDOWN/ESCALATED hold (a device reads
+        # unknown mid-reboot); snooze/follow already returned above.
+        if h == Health.UNKNOWN:
+            if self.state in (GState.OK, GState.SUSPECT):
+                self._cancel_timer()
+                self._set_state(GState.BLIND)
+            else:
+                self._emit()
+            return
+
+        if self.state in (GState.OK, GState.BLIND) and h == Health.UNHEALTHY:
             self._enter_suspect()
-        elif self.state == GState.SUSPECT and h == Health.OK:
+        elif self.state in (GState.SUSPECT, GState.BLIND) and h == Health.OK:
             self._cancel_timer()
             self._set_state(GState.OK)
         elif self.state == GState.ESCALATED and h == Health.OK:
