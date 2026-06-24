@@ -635,7 +635,7 @@
       "message": "Cannot snooze {name} while it is actively recovering — wait for the recovery to finish."
     },
     "unknown_guard": {
-      "message": "{entity_id} is not a Necromancer guard status entity — pass the guard's status sensor (sensor.<name>_status, the guard_entity_id a recovery action receives)."
+      "message": "{entity_id} is not a Necromancer guard status entity — pass the guard's status sensor, the guard_entity_id a recovery action receives."
     }
   },
   "issues": {

@@ -635,7 +635,7 @@
       "message": "{name} kann nicht schlummern, während gerade eine Reparatur läuft — warte, bis sie abgeschlossen ist."
     },
     "unknown_guard": {
-      "message": "{entity_id} ist keine Necromancer-Guard-Status-Entity — übergib den Status-Sensor des Guards (sensor.<name>_status, das guard_entity_id, das eine Reparatur-Aktion erhält)."
+      "message": "{entity_id} ist keine Necromancer-Guard-Status-Entity — übergib den Status-Sensor des Guards, das guard_entity_id, das eine Reparatur-Aktion erhält."
     }
   },
   "issues": {
