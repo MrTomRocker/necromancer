@@ -71,3 +71,35 @@ snooze_all:
         duration:
 
 unsnooze_all:
+
+check_health:
+  fields:
+    guard:
+      required: true
+      example: sensor.hue_bridge_status
+      selector:
+        entity:
+          integration: necromancer
+          domain: sensor
+
+wait_for_health:
+  fields:
+    guard:
+      required: true
+      example: sensor.hue_bridge_status
+      selector:
+        entity:
+          integration: necromancer
+          domain: sensor
+    timeout:
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 3600
+          unit_of_measurement: s
+          mode: box
+    check_first:
+      default: true
+      selector:
+        boolean:

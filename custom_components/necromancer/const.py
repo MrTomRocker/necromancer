@@ -112,6 +112,13 @@ ATTR_EVENT = "event"
 ATTR_EVENT_TEXT = "event_text"
 ATTR_ATTEMPT = "attempt"
 ATTR_MAX = "max"
+# Per-guard health primitives (response services) — a recovery script passes the
+# guard's status entity (guard) to re-use its health-check instead of rebuilding it.
+SERVICE_CHECK_HEALTH = "check_health"
+SERVICE_WAIT_FOR_HEALTH = "wait_for_health"
+ATTR_GUARD = "guard"
+ATTR_TIMEOUT = "timeout"
+ATTR_CHECK_FIRST = "check_first"
 # Domain-level bulk services (no target — act on every guard; "maintenance mode").
 SERVICE_SNOOZE_ALL = "snooze_all"
 SERVICE_UNSNOOZE_ALL = "unsnooze_all"

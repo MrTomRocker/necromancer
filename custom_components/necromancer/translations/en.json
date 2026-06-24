@@ -510,11 +510,42 @@
     "unsnooze_all": {
       "name": "Unsnooze all",
       "description": "Resume every snoozed guard immediately."
+    },
+    "check_health": {
+      "name": "Check health",
+      "description": "Evaluate a guard's health right now and return it (ok / unhealthy / unknown) — for a recovery script to re-use the guard's own health-check instead of rebuilding it.",
+      "fields": {
+        "guard": {
+          "name": "Guard",
+          "description": "The guard's status entity (pass the {{ guard_entity_id }} that a recovery action receives)."
+        }
+      }
+    },
+    "wait_for_health": {
+      "name": "Wait for health",
+      "description": "Wait until a guard reports healthy again, or the timeout elapses. Returns health, timed_out and waited_s — so a staged recovery can verify between tiers using the guard's own health-check.",
+      "fields": {
+        "guard": {
+          "name": "Guard",
+          "description": "The guard's status entity (pass the {{ guard_entity_id }} that a recovery action receives)."
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "Seconds to wait for health to read OK. Defaults to the guard's boot window."
+        },
+        "check_first": {
+          "name": "Check first",
+          "description": "Evaluate once before waiting and return immediately if already healthy (default: on)."
+        }
+      }
     }
   },
   "exceptions": {
     "snooze_during_recovery": {
       "message": "Cannot snooze {name} while it is actively recovering — wait for the recovery to finish."
+    },
+    "unknown_guard": {
+      "message": "{entity_id} is not a Necromancer guard status entity — pass the guard's status sensor (sensor.<name>_status, the guard_entity_id a recovery action receives)."
     }
   }
 }

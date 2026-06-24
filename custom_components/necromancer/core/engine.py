@@ -113,6 +113,9 @@ class DeviceEngine:
         self._unsub_driver: CALLBACK_TYPE | None = None
         self._unsub_timer: CALLBACK_TYPE | None = None
         self._verify_event: asyncio.Event | None = None
+        # Independent waiters for the wait_for_health service (kept separate from the
+        # engine's own VERIFY event so a service call never clobbers an active cycle).
+        self._health_waiters: set[asyncio.Event] = set()
         self._cycle_task: asyncio.Task | None = None
         self._stopping = False
         self._last_eval_log: tuple[Health, GState] | None = None
@@ -538,8 +541,11 @@ class DeviceEngine:
         if self._following:
             self._emit()
             return
-        if self._verify_event is not None and h == Health.OK:
-            self._verify_event.set()
+        if h == Health.OK:
+            if self._verify_event is not None:
+                self._verify_event.set()
+            for waiter in self._health_waiters:
+                waiter.set()
 
         if self.state == GState.OK and h == Health.UNHEALTHY:
             self._enter_suspect()
@@ -781,6 +787,33 @@ class DeviceEngine:
             return self.health.evaluate() == Health.OK
         finally:
             self._verify_event = None
+
+    def current_health(self) -> Health:
+        """The guard's health verdict right now (fresh, on-demand evaluation)."""
+        return self.health.evaluate()
+
+    async def async_service_wait_health(
+        self, timeout: int | None = None, *, check_first: bool = True
+    ) -> bool:
+        """Wait for health to read OK — backs the wait_for_health service.
+
+        Uses its own waiter so it never clobbers an in-flight VERIFY; the timeout
+        defaults to the guard's boot_window. With `check_first`, returns at once if
+        health is already OK. Returns True iff health reads OK in time.
+        """
+        if timeout is None:
+            timeout = self._int(CONF_BOOT_WINDOW, DEFAULT_BOOT_WINDOW)
+        if check_first and self.health.evaluate() == Health.OK:
+            return True
+        waiter = asyncio.Event()
+        self._health_waiters.add(waiter)
+        try:
+            await asyncio.wait_for(waiter.wait(), timeout)
+            return True
+        except TimeoutError:
+            return self.health.evaluate() == Health.OK
+        finally:
+            self._health_waiters.discard(waiter)
 
     def _recover_success(self, *, via_link: bool = False) -> None:
         """Record a successful repair and move into the COOLDOWN settling window.

@@ -113,7 +113,7 @@ plug, a PoE camera or a cloud bridge — all guarded with the *same* model (heal
 ⚙️ **Operate & integrate**
 
 - 🎛️ **Full operator surface** — per-guard status & health entities, a revive button, an arm/disarm switch, and recovery `event`s for dashboards and automations.
-- 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard`, callable from any automation or script (e.g. snooze everything before a mass reboot, or cycle a PoE port on demand).
+- 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard` / `check_health` / `wait_for_health`, callable from any automation or script (snooze everything before a mass reboot, cycle a PoE port on demand, or let a recovery script re-use a guard's health-check).
 - 😴 **Maintenance mode** — `snooze` one guard or `snooze_all` before planned work; they go quiet and auto-resume.
 - 🧰 **Wizard-built & reconfigurable** — create and edit guards entirely in the UI; no YAML to hand-write.
 - 🏠 **Local & dependency-free** — no cloud, no extra Python packages; it orchestrates the entities you already have, and its verdicts (escalated, snooze) survive a restart.
@@ -584,6 +584,8 @@ device, or a whole area (bulk). Recovering *now* and arming auto-recovery stay t
 | `necromancer.snooze_all` | **Maintenance mode for everything** — snooze *every* guard for a `duration` (no target needed), then they all auto-resume. Guards mid-recovery are skipped (best-effort, logged). Handy as a one-tap dashboard button before a disruptive change. |
 | `necromancer.unsnooze_all` | Resume every snoozed guard at once. |
 | `necromancer.repair_poe_port` | Resolve a device `id` (MAC / IP / static label) to its PoE port and power-cycle it. It blocks until done and **coalesces per port** — concurrent callers join the one in-flight cycle instead of each cycling the port. This is the exact primitive Auto-PoE uses — call it from your own actions or automations when you want "reboot whatever is on this device's port". |
+| `necromancer.check_health` | **Evaluate a guard's health right now** and get it back (`{health: ok / unhealthy / unknown}`). Pass the guard's status entity as `guard` — typically `{{ guard_entity_id }}` inside a recovery action — and read `response_variable`. For a recovery script that wants to branch on the guard's *own* health-check instead of rebuilding it. |
+| `necromancer.wait_for_health` | **Wait until a guard reads healthy again** (or a `timeout`, default = the guard's boot window), returning `{health, timed_out, waited_s}`. Lets a *staged* recovery verify between tiers with the guard's definition of healthy: gentle fix → `wait_for_health` → `if timed_out`, escalate to the hard fix. `check_first` (default on) returns at once if it's already healthy. See [Staged recovery, verified by the guard itself](docs/cookbook/verified-staged-recovery.md). |
 
 ## Cookbook
 
@@ -598,6 +600,7 @@ Real guards from a live deployment — each a step-by-step recipe under [`docs/c
 | [Restart a pump, restore its interlocked device](docs/cookbook/pool-pump-restart.md) | Power-cycle a stalled pump and put the chlorinator back — carrying state across the off→on cycle | off/on actions · off→on variable carry · conditional restore · semantic health | pumps & devices behind a safety interlock |
 | [Alert when a Node-RED flow stalls](docs/cookbook/nodered-heartbeat.md) | Watch data freshness (`last_reported`); notify, or auto-redeploy with a health-check | freshness watchdog (`last_reported`) · notify or auto-redeploy | Node-RED flows, scrape / MQTT feeds |
 | [Escalating recovery](docs/cookbook/escalating-recovery.md) | Graceful restart first, then a sledgehammer (kill-button / add-on restart) if it didn't take | `if/then` escalation · soft→hard restart · health-check | containers, add-ons, services |
+| [Staged recovery, verified by the guard itself](docs/cookbook/verified-staged-recovery.md) | Gentle fix → ask the guard "healthy yet?" → escalate only if not, re-using the guard's own health-check | `check_health` / `wait_for_health` · staged `if/then` · one script for many guards | bridges/hubs + the devices behind them |
 | [Recover by poking another system](docs/cookbook/recover-via-another-system.md) | Restart via MQTT / REST / SSH / webhook when HA can't do it directly, verified by health | `action_call` · MQTT / REST / SSH · health-check | devices HA can't restart directly |
 | [One notification script for every guard](docs/cookbook/notification-fanout.md) | Centralize routing once — time-aware, multi-channel — instead of per-guard config | central notify fanout · time-aware routing | any multi-guard setup |
 

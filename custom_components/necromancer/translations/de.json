@@ -510,11 +510,42 @@
     "unsnooze_all": {
       "name": "Alle aufwecken",
       "description": "Beendet das Schlummern aller Guards sofort."
+    },
+    "check_health": {
+      "name": "Health prüfen",
+      "description": "Wertet die Health eines Guards sofort aus und gibt sie zurück (ok / unhealthy / unknown) — damit ein Recovery-Skript die eigene Health-Prüfung des Guards wiederverwendet, statt sie nachzubauen.",
+      "fields": {
+        "guard": {
+          "name": "Guard",
+          "description": "Die Status-Entity des Guards (das {{ guard_entity_id }}, das eine Recovery-Aktion erhält)."
+        }
+      }
+    },
+    "wait_for_health": {
+      "name": "Auf Health warten",
+      "description": "Wartet, bis ein Guard wieder gesund meldet, oder bis der Timeout greift. Gibt health, timed_out und waited_s zurück — so kann eine gestufte Recovery zwischen den Stufen über die eigene Health-Prüfung des Guards verifizieren.",
+      "fields": {
+        "guard": {
+          "name": "Guard",
+          "description": "Die Status-Entity des Guards (das {{ guard_entity_id }}, das eine Recovery-Aktion erhält)."
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "Sekunden, die auf Health=OK gewartet wird. Default: das Boot-Window des Guards."
+        },
+        "check_first": {
+          "name": "Zuerst prüfen",
+          "description": "Vor dem Warten einmal auswerten und sofort zurückkehren, wenn schon gesund (Default: an)."
+        }
+      }
     }
   },
   "exceptions": {
     "snooze_during_recovery": {
       "message": "{name} kann nicht schlummern, während gerade eine Reparatur läuft — warte, bis sie abgeschlossen ist."
+    },
+    "unknown_guard": {
+      "message": "{entity_id} ist keine Necromancer-Guard-Status-Entity — übergib den Status-Sensor des Guards (sensor.<name>_status, das guard_entity_id, das eine Recovery-Aktion erhält)."
     }
   }
 }

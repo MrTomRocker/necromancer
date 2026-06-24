@@ -17,12 +17,20 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 import logging
+import time
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceCall, callback
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     config_validation as cv,
@@ -33,8 +41,11 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    ATTR_CHECK_FIRST,
     ATTR_DURATION,
+    ATTR_GUARD,
     ATTR_ID,
+    ATTR_TIMEOUT,
     CONF_BEHAVIOR,
     CONF_DEVICE_ID,
     CONF_DRIVER,
@@ -48,9 +59,11 @@ from .const import (
     MODE_NOTIFY,
     PLATFORMS,
     SAVE_DELAY,
+    SERVICE_CHECK_HEALTH,
     SERVICE_REPAIR_POE_PORT,
     SERVICE_SNOOZE_ALL,
     SERVICE_UNSNOOZE_ALL,
+    SERVICE_WAIT_FOR_HEALTH,
     STORAGE_VERSION,
     SUBENTRY_TYPE_DEVICE,
 )
@@ -131,6 +144,25 @@ def _rename_handler(
 
 
 # ---------- HA lifecycle: setup ----------
+def _engine_for_guard(
+    hass: HomeAssistant, entry: NecromancerConfigEntry, guard_entity_id: str
+) -> DeviceEngine:
+    """Resolve a guard's status entity to its engine (for the health services)."""
+    ent = er.async_get(hass).async_get(guard_entity_id)
+    engine = (
+        entry.runtime_data.engines.get(ent.config_subentry_id)
+        if ent is not None and ent.platform == DOMAIN
+        else None
+    )
+    if engine is None:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_guard",
+            translation_placeholders={"entity_id": guard_entity_id},
+        )
+    return engine
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) -> bool:
     """Set up the service: one engine per guarded-device subentry."""
     store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -203,6 +235,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
         schema=vol.Schema({vol.Required(ATTR_DURATION): cv.positive_time_period}),
     )
     hass.services.async_register(DOMAIN, SERVICE_UNSNOOZE_ALL, _unsnooze_all)
+
+    # Per-guard health primitives (response services) — a recovery script passes the
+    # guard's status entity and re-uses the guard's own health-check.
+    async def _check_health(call: ServiceCall) -> ServiceResponse:
+        engine = _engine_for_guard(hass, entry, call.data[ATTR_GUARD])
+        return {"health": engine.current_health().value}
+
+    async def _wait_for_health(call: ServiceCall) -> ServiceResponse:
+        engine = _engine_for_guard(hass, entry, call.data[ATTR_GUARD])
+        start = time.monotonic()
+        ok = await engine.async_service_wait_health(
+            call.data.get(ATTR_TIMEOUT), check_first=call.data[ATTR_CHECK_FIRST]
+        )
+        return {
+            "health": engine.current_health().value,
+            "timed_out": not ok,
+            "waited_s": round(time.monotonic() - start),
+        }
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CHECK_HEALTH,
+        _check_health,
+        schema=vol.Schema({vol.Required(ATTR_GUARD): cv.entity_id}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_WAIT_FOR_HEALTH,
+        _wait_for_health,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_GUARD): cv.entity_id,
+                vol.Optional(ATTR_TIMEOUT): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Optional(ATTR_CHECK_FIRST, default=True): cv.boolean,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
 
     # Guard linking: resolve each guard's group (clique-closed) from the declared
     # links. Only **recover** guards can link (matching the config flow's options),
