@@ -517,7 +517,7 @@
       "fields": {
         "guard": {
           "name": "Guard",
-          "description": "The guard's status entity (pass the {{ guard_entity_id }} that a recovery action receives)."
+          "description": "The guard's status entity — the value a recovery action receives as guard_entity_id."
         }
       }
     },
@@ -527,7 +527,7 @@
       "fields": {
         "guard": {
           "name": "Guard",
-          "description": "The guard's status entity (pass the {{ guard_entity_id }} that a recovery action receives)."
+          "description": "The guard's status entity — the value a recovery action receives as guard_entity_id."
         },
         "timeout": {
           "name": "Timeout",

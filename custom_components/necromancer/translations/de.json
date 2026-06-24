@@ -517,7 +517,7 @@
       "fields": {
         "guard": {
           "name": "Guard",
-          "description": "Die Status-Entity des Guards (das {{ guard_entity_id }}, das eine Recovery-Aktion erhält)."
+          "description": "Die Status-Entity des Guards — der Wert, den eine Recovery-Aktion als guard_entity_id erhält."
         }
       }
     },
@@ -527,7 +527,7 @@
       "fields": {
         "guard": {
           "name": "Guard",
-          "description": "Die Status-Entity des Guards (das {{ guard_entity_id }}, das eine Recovery-Aktion erhält)."
+          "description": "Die Status-Entity des Guards — der Wert, den eine Recovery-Aktion als guard_entity_id erhält."
         },
         "timeout": {
           "name": "Timeout",
