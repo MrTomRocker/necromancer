@@ -91,14 +91,14 @@ plug, a PoE camera or a cloud bridge — all guarded with the *same* model (heal
 
 🔎 **Detect — is it broken?**
 
-- 🩺 **Two Health Sources** — any entity's state/attribute, or an inline **Jinja template** (e.g. *"online but drawing 0 W"*). Ambiguous readings (`unknown`/`unavailable`, render errors) count as *unknown*, never a fault.
+- 🩺 **Two Health Sources** — any entity's state/attribute, or an inline **Jinja template** (e.g. *"online but drawing 0 W"*). Ambiguous readings (`unknown`/`unavailable`, render errors) count as *unknown*, never a fault — the guard goes **`blind`** instead of showing a stale OK.
 
 🛠 **Recover — fix it**
 
 - 🔌 **Power-cycle a switch** — a smart plug, relay or any `switch`/`input_boolean`: off → wait → on.
 - ▶️ **Run any action** — a script, service call, SSH, `rest_command`, webhook, MQTT — anything Home Assistant can do.
 - 🔁 **Off/on action pair** — cut power one way, restore it another, with variables carried from the *off* step into the *on* step (no helper entity needed).
-- 🧪 **Rich Jinja context for your actions** — recovery actions receive `attempt` / `max` / `name` / `guard_entity_id`, and notify actions a full alert variable set — so deeply-integrated actions and automations can branch on the live recovery context.
+- 🧪 **Rich Jinja context for your actions** — recovery actions receive `attempt` / `max` / `name` / `guard_entity_id`, and notify actions a full alert variable set — so deeply-integrated actions and automations can branch on the live recovery context, and an action can report a failed repair back by setting `recover_failed`.
 - 🐳 **Restart containers, add-ons & services** — graceful first, then a harder fallback *inside the same attempt* (`if/then`, `wait_template`).
 - 🔄 **Reload the device's integration after a repair** — an optional checkbox: Necromancer reloads the assigned device's config entry (before re-checking health), so Home Assistant reconnects to a device that just came back.
 - 📡 **Vendor-neutral Auto-PoE** — resolves a device to its PoE port by MAC / IP / name and power-cycles it; no UniFi/Omada/Netgear lock-in, and it works even after the device aged out of the switch.
@@ -112,7 +112,8 @@ plug, a PoE camera or a cloud bridge — all guarded with the *same* model (heal
 
 ⚙️ **Operate & integrate**
 
-- 🎛️ **Full operator surface** — per-guard status & health entities, a revive button, an arm/disarm switch, and recovery `event`s for dashboards and automations.
+- 🎛️ **Full operator surface** — per-guard status & health entities (with recover & fail counts and the recovery driver's own last result), a revive button, an arm/disarm switch, and recovery `event`s for dashboards and automations.
+- 🩹 **Self-diagnosing config** — a guard pointed at a missing or disabled health entity, a health template that reads only missing entities (or silently defaults one), a broken recovery action, or a PoE port with no id or a missing actuator surfaces in **Settings → Repairs** — event-driven and self-clearing.
 - 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard` / `check_health` / `wait_for_health`, callable from any automation or script (snooze everything before a mass reboot, cycle a PoE port on demand, or let a recovery script re-use a guard's Health Check).
 - 😴 **Maintenance mode** — `snooze` one guard or `snooze_all` before planned work; they go quiet and auto-resume.
 - 🧰 **Wizard-built & reconfigurable** — create and edit guards entirely in the UI; no YAML to hand-write.
