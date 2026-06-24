@@ -637,8 +637,11 @@ class DeviceEngine:
         while a cycle is already running is ignored — otherwise resetting `attempt`
         mid-flight would defeat `max_attempts`.
         """
-        if self._busy():
-            LOGGER.info("%s manual recover ignored — already recovering", self.name)
+        if self._busy() or self._following:
+            LOGGER.info(
+                "%s manual recover ignored — busy or following a linked repair",
+                self.name,
+            )
             return
         LOGGER.info("%s manual recovery requested", self.name)
         self.attempt = 0

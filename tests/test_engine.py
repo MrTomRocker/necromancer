@@ -199,6 +199,25 @@ async def test_manual_recover_during_snooze_lifts_snooze(hass, _):
     await eng.async_stop()
 
 
+async def test_manual_recover_while_following_is_ignored(hass, _):
+    # In follow-hold we have no cycle task yet, so _busy() is False — a manual
+    # recover must still be ignored, not launch a competing cycle (the double
+    # recovery linking exists to prevent).
+    h2 = FakeHealth(hass, Health.UNHEALTHY)
+    d2 = StubDriver(hass)
+    _e1, e2 = make_pair(
+        hass, FakeHealth(hass, Health.UNHEALTHY), StubDriver(hass), h2, d2,
+        boot_window=0,
+    )
+    await e2.async_start()
+    e2._on_partner_repair_start("g1")  # enter follow-hold (no cycle task yet)
+    assert e2._following is True and not e2._busy()
+    await e2.async_manual_recover()  # following -> must be ignored
+    await hass.async_block_till_done()
+    assert d2.calls == 0  # no competing own recovery ran
+    await e2.async_stop()
+
+
 async def test_cooldown_to_suspect(hass, _):
     health = FakeHealth(hass, Health.OK)
     driver = StubDriver(hass, on_recover=lambda: setattr(health, "verdict", Health.OK))
