@@ -274,6 +274,46 @@ class DeviceEngine:
                     sorted(loop),
                 )
 
+    def config_problems(self) -> list[dict]:
+        """Current, user-fixable config problems for this guard (for repair issues).
+
+        Surfaces the same things `_check_config` logs, as structured records the
+        issue reconciler turns into Repairs: a missing/disabled health entity, a
+        blind template (reads only gone entities), or an invalid recovery action.
+        """
+        ent_reg = er.async_get(self.hass)
+
+        def _missing(eid: str) -> bool:
+            return ent_reg.async_get(eid) is None and self.hass.states.get(eid) is None
+
+        def _disabled(eid: str) -> bool:
+            entry = ent_reg.async_get(eid)
+            return entry is not None and entry.disabled
+
+        problems: list[dict] = []
+        for eid in self.health.watched_entities:
+            if _missing(eid):
+                problems.append(self._problem("health_entity_missing", entity=eid))
+            elif _disabled(eid):
+                problems.append(self._problem("health_entity_disabled", entity=eid))
+        # A template subscribes to nothing directly; it is blind only if EVERY
+        # entity its verdict reads is gone (one missing of many is just a warning).
+        if not self.health.watched_entities:
+            referenced = self.health.referenced_entities()
+            if referenced and all(_missing(e) or _disabled(e) for e in referenced):
+                problems.append(self._problem("health_template_blind"))
+        if errors := self.driver.config_errors():
+            problems.append(self._problem("recovery_action_invalid", error=errors[0]))
+        return problems
+
+    def _problem(self, key: str, **extra: str) -> dict:
+        """Build one config-problem record (severity is the reconciler's default)."""
+        return {
+            "id": f"{self._subentry_id}_{key}",
+            "key": key,
+            "placeholders": {"name": self.name, **extra},
+        }
+
     async def async_stop(self) -> None:
         """Tear down the engine: unsubscribe, cancel timers, and abort any cycle.
 

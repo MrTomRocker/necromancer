@@ -36,6 +36,7 @@ from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
     entity_registry as er,
+    issue_registry as ir,
 )
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
@@ -161,6 +162,51 @@ def _engine_for_guard(
             translation_placeholders={"entity_id": guard_entity_id},
         )
     return engine
+
+
+_ISSUE_SEVERITY = {
+    "health_entity_missing": ir.IssueSeverity.ERROR,
+    "health_entity_disabled": ir.IssueSeverity.ERROR,
+    "health_template_blind": ir.IssueSeverity.ERROR,
+    "recovery_action_invalid": ir.IssueSeverity.ERROR,
+    "port_no_id": ir.IssueSeverity.WARNING,
+    "port_entity_missing": ir.IssueSeverity.ERROR,
+}
+
+
+def _reconcile_issues(
+    hass: HomeAssistant, engines: dict[str, DeviceEngine], fabric: PoeFabric
+) -> None:
+    """Surface user-fixable config problems in Repairs, clearing resolved ones.
+
+    Idempotent: re-run at startup and on every reload — so fixing the config and
+    saving (which reloads the entry) makes a stale issue disappear by itself.
+    """
+    desired: dict[str, dict] = {}
+    for eng in engines.values():
+        for problem in eng.config_problems():
+            desired[problem["id"]] = problem
+    for problem in fabric.port_problems():
+        desired[problem["id"]] = problem
+
+    reg = ir.async_get(hass)
+    ours = {
+        iid
+        for (dom, iid), issue in reg.issues.items()
+        if dom == DOMAIN and issue.translation_key in _ISSUE_SEVERITY
+    }
+    for iid, problem in desired.items():
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            iid,
+            is_fixable=False,
+            severity=_ISSUE_SEVERITY[problem["key"]],
+            translation_key=problem["key"],
+            translation_placeholders=problem["placeholders"],
+        )
+    for iid in ours - set(desired):
+        ir.async_delete_issue(hass, DOMAIN, iid)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) -> bool:
@@ -353,6 +399,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NecromancerConfigEntry) 
     def _validate_configs(_hass: HomeAssistant) -> None:
         for eng in engines.values():
             eng._check_config(_hass)
+        _reconcile_issues(_hass, engines, fabric)
 
     entry.async_on_unload(async_at_started(hass, _validate_configs))
     return True

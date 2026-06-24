@@ -636,5 +636,31 @@
     "unknown_guard": {
       "message": "{entity_id} ist keine Necromancer-Guard-Status-Entity — übergib den Status-Sensor des Guards (sensor.<name>_status, das guard_entity_id, das eine Reparatur-Aktion erhält)."
     }
+  },
+  "issues": {
+    "health_entity_missing": {
+      "title": "{name}: Health-Entity fehlt",
+      "description": "Der Guard „{name}\" beobachtet `{entity}` — die Entity existiert nicht, der Guard ist blind und kann kein Problem erkennen. Konfiguriere den Guard auf eine existierende Entity um, oder entferne den Guard."
+    },
+    "health_entity_disabled": {
+      "title": "{name}: Health-Entity ist deaktiviert",
+      "description": "Der Guard „{name}\" beobachtet `{entity}` — die Entity ist deaktiviert, der Guard ist blind. Aktiviere `{entity}` wieder, oder konfiguriere den Guard auf eine andere Entity um."
+    },
+    "health_template_blind": {
+      "title": "{name}: Health Template liest nur fehlende Entities",
+      "description": "Alle Entities, die das Health Template von „{name}\" liest, fehlen oder sind deaktiviert — der Guard ist blind. Konfiguriere das Health Template des Guards auf existierende Entities um."
+    },
+    "recovery_action_invalid": {
+      "title": "{name}: Reparatur kann nicht laufen",
+      "description": "Die Reparatur von „{name}\" kann nicht laufen: {error}. Korrigiere die Reparatur des Guards — ein gültiger Service / eine gültige Aktion, oder (bei Auto-PoE) mindestens ein konfigurierter Port."
+    },
+    "port_no_id": {
+      "title": "PoE-Port „{label}\" hat keine Geräte-ID",
+      "description": "Der PoE-Port „{label}\" hat weder ein Statisches Label noch eine id-Entity — er kann keinem Gerät zugeordnet werden, jeder Guard, der ihn erwartet, bleibt blockiert. Öffne die Integrations-Optionen, bearbeite Port „{label}\" und setze entweder ein Statisches Label oder eine id-Entity (ein State oder ein Attribut)."
+    },
+    "port_entity_missing": {
+      "title": "PoE-Port „{label}\": eine Entity fehlt",
+      "description": "Der PoE-Port „{label}\" referenziert `{entity}` — die Entity existiert nicht, sein Power-Cycle kann nicht laufen. Öffne die Integrations-Optionen, bearbeite Port „{label}\" und zeige mit Actuator / Status-Entity auf eine existierende Entity."
+    }
   }
 }

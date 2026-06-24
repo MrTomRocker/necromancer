@@ -130,8 +130,17 @@ def _events(hass):
 async def test_resolve_live_single(hass, _stubs):
     hass.states.async_set("sensor.nb1", "x", {"mac": "aa:bb:cc"})
     f = PoeFabric(hass)
-    f.set_ports([port("P1", "switch.a1", "binary_sensor.s1",
-                      id_entity="sensor.nb1", id_attribute="mac")])
+    f.set_ports(
+        [
+            port(
+                "P1",
+                "switch.a1",
+                "binary_sensor.s1",
+                id_entity="sensor.nb1",
+                id_attribute="mac",
+            )
+        ]
+    )
     p, reason = f.resolve_with_reason("AA:BB:CC")  # case-insensitive
     assert p is not None and p[CONF_LABEL] == "P1", (p, reason)
     assert reason == ""
@@ -142,10 +151,24 @@ async def test_resolve_ambiguous(hass, _stubs):
     hass.states.async_set("sensor.nb1", "x", {"mac": "dup"})
     hass.states.async_set("sensor.nb2", "x", {"mac": "dup"})
     f = PoeFabric(hass)
-    f.set_ports([
-        port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.nb1", id_attribute="mac"),
-        port("P2", "switch.a2", "binary_sensor.s2", id_entity="sensor.nb2", id_attribute="mac"),
-    ])
+    f.set_ports(
+        [
+            port(
+                "P1",
+                "switch.a1",
+                "binary_sensor.s1",
+                id_entity="sensor.nb1",
+                id_attribute="mac",
+            ),
+            port(
+                "P2",
+                "switch.a2",
+                "binary_sensor.s2",
+                id_entity="sensor.nb2",
+                id_attribute="mac",
+            ),
+        ]
+    )
     p, reason = f.resolve_with_reason("dup")
     assert p is None and "2 ports" in reason, (p, reason)
 
@@ -154,8 +177,15 @@ async def test_resolve_last_known(hass, _stubs):
     f = PoeFabric(hass)
     # no live id (entity has no mac), but cache seeded -> last-known fallback
     f.set_ports(
-        [port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.missing",
-              id_attribute="mac")],
+        [
+            port(
+                "P1",
+                "switch.a1",
+                "binary_sensor.s1",
+                id_entity="sensor.missing",
+                id_attribute="mac",
+            )
+        ],
         cache={"aa:bb:cc": "P1"},
     )
     p, reason = f.resolve_with_reason("aa:bb:cc")
@@ -169,8 +199,15 @@ async def test_resolve_last_known_skips_occupied_port(hass, _stubs):
     hass.states.async_set("sensor.nb1", "x", {"mac": "bb:bb"})  # P1 now serves B
     f = PoeFabric(hass)
     f.set_ports(
-        [port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.nb1",
-              id_attribute="mac")],
+        [
+            port(
+                "P1",
+                "switch.a1",
+                "binary_sensor.s1",
+                id_entity="sensor.nb1",
+                id_attribute="mac",
+            )
+        ],
         cache={"aa:aa": "P1"},  # stale: A -> P1
     )
     p, reason = f.resolve_with_reason("aa:aa")
@@ -197,7 +234,15 @@ async def test_port_with_both_id_sources_is_ignored(hass, _stubs):
     f = PoeFabric(hass)
     # both a fixed id and an id-entity -> misconfigured -> ignored, matches nothing
     f.set_ports(
-        [port("PX", "switch.a", "binary_sensor.s", id_static="dev", id_entity="sensor.nb")]
+        [
+            port(
+                "PX",
+                "switch.a",
+                "binary_sensor.s",
+                id_static="dev",
+                id_entity="sensor.nb",
+            )
+        ]
     )
     p, reason = f.resolve_with_reason("dev")
     assert p is None and "no port matches" in reason, (p, reason)
@@ -207,10 +252,24 @@ async def test_relearn_recable_updates_cache(hass, _stubs):
     hass.states.async_set("sensor.nb1", "x", {"mac": "aa:bb"})
     hass.states.async_set("sensor.nb2", "x", {})
     f = PoeFabric(hass)
-    f.set_ports([
-        port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.nb1", id_attribute="mac"),
-        port("P2", "switch.a2", "binary_sensor.s2", id_entity="sensor.nb2", id_attribute="mac"),
-    ])
+    f.set_ports(
+        [
+            port(
+                "P1",
+                "switch.a1",
+                "binary_sensor.s1",
+                id_entity="sensor.nb1",
+                id_attribute="mac",
+            ),
+            port(
+                "P2",
+                "switch.a2",
+                "binary_sensor.s2",
+                id_entity="sensor.nb2",
+                id_attribute="mac",
+            ),
+        ]
+    )
     assert f.cache.get("aa:bb") == "P1", f.cache
     # device re-cabled to P2: P1 loses it, P2 reports it -> cache follows (WARNING)
     hass.states.async_set("sensor.nb1", "x", {})
@@ -225,10 +284,12 @@ async def test_placeholder_ids_are_never_learned(hass, _stubs):
     hass.states.async_set("sensor.nb1", "-", {})
     hass.states.async_set("sensor.nb2", "-", {})
     f = PoeFabric(hass)
-    f.set_ports([
-        port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.nb1"),
-        port("P2", "switch.a2", "binary_sensor.s2", id_entity="sensor.nb2"),
-    ])
+    f.set_ports(
+        [
+            port("P1", "switch.a1", "binary_sensor.s1", id_entity="sensor.nb1"),
+            port("P2", "switch.a2", "binary_sensor.s2", id_entity="sensor.nb2"),
+        ]
+    )
     assert f.cache == {}, f.cache  # nothing learned from "-"
     # a placeholder identifier resolves to nothing (never matches a "-" port)
     p, reason = f.resolve_with_reason("-")
@@ -249,7 +310,9 @@ async def test_repair_cycles_and_fires_status(hass, stubs):
     await hass.async_block_till_done()
     assert ok is True
     assert hass.states.get("switch.act").state == "on"  # ends powered on
-    assert (PORT_RECOVERING in [s for _, s in seen]) and (PORT_GOOD in [s for _, s in seen]), seen
+    assert (PORT_RECOVERING in [s for _, s in seen]) and (
+        PORT_GOOD in [s for _, s in seen]
+    ), seen
     assert f.status("PX") == PORT_GOOD
 
 
@@ -290,7 +353,9 @@ async def test_concurrent_callers_coalesce(hass, stubs):
     hass.states.async_set("switch.actL", "on")
     hass.states.async_set("binary_sensor.stL", "on")
     f = PoeFabric(hass)
-    f.set_ports([port("PL", "switch.actL", "binary_sensor.stL", id_static="dev", delay=0)])
+    f.set_ports(
+        [port("PL", "switch.actL", "binary_sensor.stL", id_static="dev", delay=0)]
+    )
     res = await asyncio.gather(f.repair("dev"), f.repair("dev"))
     await hass.async_block_till_done()
     stubs.slow = 0.0
@@ -369,6 +434,25 @@ async def test_driver_and_service_coalesce(hass, stubs):
     stubs.slow = 0.0
     assert stubs.cycles == 1, f"driver & service ran {stubs.cycles} cycles (want 1)"
     assert stubs.max_conc == 1
+
+
+async def test_port_problems_no_id_and_missing_entity(hass, stubs):
+    # No id source -> port_no_id; an actuator/status entity with no state ->
+    # port_entity_missing; a fully-configured port -> nothing.
+    f = PoeFabric(hass)
+    f.set_ports(
+        [
+            port("NOID", "switch.act_noid", "binary_sensor.st_noid"),
+            port("OK", "switch.act_ok", "binary_sensor.st_ok", id_static="dev"),
+        ]
+    )
+    hass.states.async_set("switch.act_ok", "on")
+    hass.states.async_set("binary_sensor.st_ok", "on")
+    found = {(p["placeholders"]["label"], p["key"]) for p in f.port_problems()}
+    assert ("NOID", "port_no_id") in found
+    assert ("NOID", "port_entity_missing") in found
+    assert ("OK", "port_no_id") not in found
+    assert ("OK", "port_entity_missing") not in found
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

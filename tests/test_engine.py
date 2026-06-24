@@ -15,13 +15,17 @@ import asyncio
 import sys
 from datetime import timedelta
 
+import homeassistant.helpers.issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 from tests.common import async_fire_time_changed, async_test_home_assistant
 
+from custom_components.necromancer import _reconcile_issues
 from custom_components.necromancer.core.drivers.base import RecoveryDriver
 from custom_components.necromancer.core.engine import DeviceEngine, GState
 from custom_components.necromancer.core.health.base import Health, HealthSource
+from custom_components.necromancer.core.health.entity_state import EntityStateHealth
+from custom_components.necromancer.core.poe import PoeFabric
 from custom_components.necromancer.core.policies.notify import NotifyPolicy
 from custom_components.necromancer.core.policies.standard import StandardPolicy
 
@@ -63,23 +67,52 @@ class StubDriver(RecoveryDriver):
 
 
 def make(hass, health, driver, **behavior):
-    b = {"debounce": 30, "boot_window": 30, "cooldown": 30, "max_attempts": 2,
-         "health_check": True}
+    b = {
+        "debounce": 30,
+        "boot_window": 30,
+        "cooldown": 30,
+        "max_attempts": 2,
+        "health_check": True,
+    }
     b.update(behavior)
-    return DeviceEngine(hass, "G", health, driver, StandardPolicy({}), b,
-                        subentry_id="g", engines={})
+    return DeviceEngine(
+        hass, "G", health, driver, StandardPolicy({}), b, subentry_id="g", engines={}
+    )
 
 
 def make_pair(hass, h1, d1, h2, d2, **behavior):
     """Two mutually-linked recover guards sharing one engines registry."""
-    b = {"debounce": 30, "boot_window": 30, "cooldown": 30, "max_attempts": 2,
-         "health_check": True}
+    b = {
+        "debounce": 30,
+        "boot_window": 30,
+        "cooldown": 30,
+        "max_attempts": 2,
+        "health_check": True,
+    }
     b.update(behavior)
     engines: dict[str, DeviceEngine] = {}
-    e1 = DeviceEngine(hass, "G1", h1, d1, StandardPolicy({}), dict(b),
-                      subentry_id="g1", linked_guards=["g2"], engines=engines)
-    e2 = DeviceEngine(hass, "G2", h2, d2, StandardPolicy({}), dict(b),
-                      subentry_id="g2", linked_guards=["g1"], engines=engines)
+    e1 = DeviceEngine(
+        hass,
+        "G1",
+        h1,
+        d1,
+        StandardPolicy({}),
+        dict(b),
+        subentry_id="g1",
+        linked_guards=["g2"],
+        engines=engines,
+    )
+    e2 = DeviceEngine(
+        hass,
+        "G2",
+        h2,
+        d2,
+        StandardPolicy({}),
+        dict(b),
+        subentry_id="g2",
+        linked_guards=["g1"],
+        engines=engines,
+    )
     engines["g1"], engines["g2"] = e1, e2
     return e1, e2
 
@@ -263,7 +296,11 @@ async def test_manual_recover_while_following_is_ignored(hass, _):
     h2 = FakeHealth(hass, Health.UNHEALTHY)
     d2 = StubDriver(hass)
     _e1, e2 = make_pair(
-        hass, FakeHealth(hass, Health.UNHEALTHY), StubDriver(hass), h2, d2,
+        hass,
+        FakeHealth(hass, Health.UNHEALTHY),
+        StubDriver(hass),
+        h2,
+        d2,
         boot_window=0,
     )
     await e2.async_start()
@@ -424,8 +461,12 @@ async def test_async_stop_cancels_validate_no_escalation(hass, _):
     # on a torn-down engine, link state reset.
     h2 = FakeHealth(hass, Health.UNHEALTHY)
     e1, e2 = make_pair(
-        hass, FakeHealth(hass, Health.OK), StubDriver(hass),
-        h2, StubDriver(hass), boot_window=5,
+        hass,
+        FakeHealth(hass, Health.OK),
+        StubDriver(hass),
+        h2,
+        StubDriver(hass),
+        boot_window=5,
     )
     await e2.async_start()
     e2._on_partner_repair_start("g1")
@@ -475,8 +516,14 @@ async def test_leader_stop_does_not_escalate_follower(hass, _):
 async def test_notify_only_guard_ignores_partner_start(hass, _):
     # A notify-only guard (allows_recovery False) is excluded from group repair.
     eng = DeviceEngine(
-        hass, "N", FakeHealth(hass, Health.UNHEALTHY), StubDriver(hass),
-        NotifyPolicy({}), {"debounce": 30}, subentry_id="n", engines={},
+        hass,
+        "N",
+        FakeHealth(hass, Health.UNHEALTHY),
+        StubDriver(hass),
+        NotifyPolicy({}),
+        {"debounce": 30},
+        subentry_id="n",
+        engines={},
     )
     eng._on_partner_repair_start("x")
     assert eng._following is False and eng.state is GState.OK
@@ -486,8 +533,13 @@ async def test_notify_only_guard_ignores_partner_start(hass, _):
 async def test_partner_start_auto_off_but_healthy_no_escalation(hass, _):
     # Auto off + our own device is fine when a partner repairs: we neither follow
     # nor escalate — nothing is wrong with us.
-    _e1, e2 = make_pair(hass, FakeHealth(hass, Health.OK), StubDriver(hass),
-                        FakeHealth(hass, Health.OK), StubDriver(hass))
+    _e1, e2 = make_pair(
+        hass,
+        FakeHealth(hass, Health.OK),
+        StubDriver(hass),
+        FakeHealth(hass, Health.OK),
+        StubDriver(hass),
+    )
     e2.auto = False
     await e2.async_start()
     e2._on_partner_repair_start("g1")
@@ -497,8 +549,13 @@ async def test_partner_start_auto_off_but_healthy_no_escalation(hass, _):
 
 async def test_partner_done_ignored_when_not_following(hass, _):
     # A done-notification we never followed (or from a different leader) is a no-op.
-    _e1, e2 = make_pair(hass, FakeHealth(hass, Health.OK), StubDriver(hass),
-                        FakeHealth(hass, Health.OK), StubDriver(hass))
+    _e1, e2 = make_pair(
+        hass,
+        FakeHealth(hass, Health.OK),
+        StubDriver(hass),
+        FakeHealth(hass, Health.OK),
+        StubDriver(hass),
+    )
     await e2.async_start()
     e2._on_partner_repair_done("g1", True)  # not following -> ignored
     assert e2.state is GState.OK and not e2._busy()
@@ -510,8 +567,13 @@ async def test_partner_done_ignored_when_not_following(hass, _):
 
 async def test_find_repairing_partner_skips_follower(hass, _):
     # A partner that is itself only FOLLOWING is not a leader to follow.
-    e1, e2 = make_pair(hass, FakeHealth(hass, Health.UNHEALTHY), StubDriver(hass),
-                       FakeHealth(hass, Health.UNHEALTHY), StubDriver(hass))
+    e1, e2 = make_pair(
+        hass,
+        FakeHealth(hass, Health.UNHEALTHY),
+        StubDriver(hass),
+        FakeHealth(hass, Health.UNHEALTHY),
+        StubDriver(hass),
+    )
     await e1.async_start()
     await e2.async_start()
     e1._set_state(GState.RECOVERING)
@@ -529,8 +591,13 @@ async def test_validate_follower_still_down_does_own_recovery(hass, _):
     h2 = FakeHealth(hass, Health.UNHEALTHY)
     d2 = StubDriver(hass, on_recover=lambda: setattr(h2, "verdict", Health.OK))
     e1, e2 = make_pair(
-        hass, FakeHealth(hass, Health.OK), StubDriver(hass),
-        h2, d2, boot_window=0, debounce=1,
+        hass,
+        FakeHealth(hass, Health.OK),
+        StubDriver(hass),
+        h2,
+        d2,
+        boot_window=0,
+        debounce=1,
     )
     await e2.async_start()
     e2._on_partner_repair_start("g1")
@@ -575,8 +642,14 @@ async def test_notify_only_debounce_problem_detected(hass, _):
     # A notify-only guard reports a confirmed problem and goes ESCALATED.
     health = FakeHealth(hass, Health.UNHEALTHY)
     eng = DeviceEngine(
-        hass, "N", health, StubDriver(hass), NotifyPolicy({}),
-        {"debounce": 1}, subentry_id="n", engines={},
+        hass,
+        "N",
+        health,
+        StubDriver(hass),
+        NotifyPolicy({}),
+        {"debounce": 1},
+        subentry_id="n",
+        engines={},
     )
     await eng.async_start()
     assert eng.state is GState.SUSPECT
@@ -602,8 +675,12 @@ async def test_debounce_follows_recovering_partner(hass, _):
     # notify us) is picked up by _find_repairing_partner and we follow it.
     h2 = FakeHealth(hass, Health.UNHEALTHY)
     e1, e2 = make_pair(
-        hass, FakeHealth(hass, Health.UNHEALTHY), StubDriver(hass),
-        h2, StubDriver(hass), debounce=1,
+        hass,
+        FakeHealth(hass, Health.UNHEALTHY),
+        StubDriver(hass),
+        h2,
+        StubDriver(hass),
+        debounce=1,
     )
     await e2.async_start()  # e2 -> SUSPECT
     e1._set_state(GState.RECOVERING)  # e1 recovering, but never notified e2
@@ -642,8 +719,17 @@ async def test_malformed_timing_falls_back_to_default(hass, _):
 async def test_persistence_escalated_stays(hass, _):
     snap = {"state": "escalated", "attempt": 2, "recover_count": 3, "auto": False}
     health = FakeHealth(hass, Health.UNHEALTHY)
-    eng = DeviceEngine(hass, "G", health, StubDriver(hass), StandardPolicy({}),
-                       {"debounce": 30}, subentry_id="g", engines={}, persisted=snap)
+    eng = DeviceEngine(
+        hass,
+        "G",
+        health,
+        StubDriver(hass),
+        StandardPolicy({}),
+        {"debounce": 30},
+        subentry_id="g",
+        engines={},
+        persisted=snap,
+    )
     assert eng.state is GState.ESCALATED  # restored, no free retry
     assert eng.recover_count == 3 and eng.auto is False
     await eng.async_start()
@@ -655,8 +741,17 @@ async def test_persistence_escalated_stays(hass, _):
 async def test_persistence_escalated_autoclears(hass, _):
     snap = {"state": "escalated", "attempt": 1, "recover_count": 1, "auto": True}
     health = FakeHealth(hass, Health.OK)  # healthy again at restart
-    eng = DeviceEngine(hass, "G", health, StubDriver(hass), StandardPolicy({}),
-                       {"debounce": 30}, subentry_id="g", engines={}, persisted=snap)
+    eng = DeviceEngine(
+        hass,
+        "G",
+        health,
+        StubDriver(hass),
+        StandardPolicy({}),
+        {"debounce": 30},
+        subentry_id="g",
+        engines={},
+        persisted=snap,
+    )
     assert eng.state is GState.ESCALATED
     await eng.async_start()  # _evaluate: escalated + healthy -> ok
     await hass.async_block_till_done()
@@ -695,16 +790,32 @@ async def test_reload_device_entry_on_repair(hass, _):
     orig = hass.config_entries.async_reload
     hass.config_entries.async_reload = _fake_reload
     try:
-        eng = DeviceEngine(hass, "RL", FakeHealth(hass), StubDriver(hass),
-                           StandardPolicy({}), {"reload_entry": True, "reload_delay": 0},
-                           link_device_id=dev.id, subentry_id="rl", engines={})
+        eng = DeviceEngine(
+            hass,
+            "RL",
+            FakeHealth(hass),
+            StubDriver(hass),
+            StandardPolicy({}),
+            {"reload_entry": True, "reload_delay": 0},
+            link_device_id=dev.id,
+            subentry_id="rl",
+            engines={},
+        )
         await eng._maybe_reload_device_entry()
         assert reloaded == [entry.entry_id], reloaded
         # flag off -> no reload
         reloaded.clear()
-        eng2 = DeviceEngine(hass, "RL2", FakeHealth(hass), StubDriver(hass),
-                            StandardPolicy({}), {}, link_device_id=dev.id,
-                            subentry_id="rl2", engines={})
+        eng2 = DeviceEngine(
+            hass,
+            "RL2",
+            FakeHealth(hass),
+            StubDriver(hass),
+            StandardPolicy({}),
+            {},
+            link_device_id=dev.id,
+            subentry_id="rl2",
+            engines={},
+        )
         await eng2._maybe_reload_device_entry()
         assert reloaded == [], reloaded
     finally:
@@ -733,8 +844,9 @@ async def test_escalate_blocked_no_recovered_error(hass, _):
         records.clear()
         eng._escalate()
         await hass.async_block_till_done()
-        assert any(lvl == logging.ERROR and "could not be recovered" in m
-                   for lvl, m in records), records
+        assert any(
+            lvl == logging.ERROR and "could not be recovered" in m for lvl, m in records
+        ), records
     finally:
         logger.removeHandler(cap)
 
@@ -755,14 +867,21 @@ async def test_raising_driver_warns_on_retry_traces_on_final(hass, _):
     try:
         driver = StubDriver(hass)
         driver.raise_it = True
-        eng = make(hass, FakeHealth(hass, Health.UNHEALTHY), driver,
-                   boot_window=0, max_attempts=2)
+        eng = make(
+            hass,
+            FakeHealth(hass, Health.UNHEALTHY),
+            driver,
+            boot_window=0,
+            max_attempts=2,
+        )
         await eng.async_start()
         await _advance(hass, 60)  # debounce -> attempt 1 (retry) -> attempt 2 (final)
         assert eng.state is GState.ESCALATED, eng.state
         msgs = [(r.levelno, r.getMessage(), r.exc_info is not None) for r in records]
         # non-final attempt: WARNING, no traceback
-        retry = [m for m in msgs if m[0] == logging.WARNING and "attempt 1/2 failed" in m[1]]
+        retry = [
+            m for m in msgs if m[0] == logging.WARNING and "attempt 1/2 failed" in m[1]
+        ]
         assert retry and retry[0][2] is False, msgs
         # final attempt: ERROR with traceback
         final = [m for m in msgs if "Recovery driver failed" in m[1]]
@@ -801,6 +920,19 @@ async def test_follower_success_notify_gated(hass, _):
     eng3._recover_success()
     await hass.async_block_till_done()
     assert "recovery_success" in notified, notified
+
+
+async def test_reconcile_creates_and_clears_config_issue(hass, _):
+    # A guard whose health entity doesn't exist -> blind -> a repair issue; once
+    # the entity exists, re-reconciling clears it (self-healing on reload).
+    health = EntityStateHealth(hass, {"entity_id": "sensor.ghost"})
+    eng = make(hass, health, StubDriver(hass))
+    fabric = PoeFabric(hass)
+    _reconcile_issues(hass, {"g": eng}, fabric)
+    assert ("necromancer", "g_health_entity_missing") in ir.async_get(hass).issues
+    hass.states.async_set("sensor.ghost", "on")  # entity exists now -> fixed
+    _reconcile_issues(hass, {"g": eng}, fabric)
+    assert ("necromancer", "g_health_entity_missing") not in ir.async_get(hass).issues
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

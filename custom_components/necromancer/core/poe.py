@@ -168,6 +168,35 @@ class PoeFabric:
         """How many ports are configured (for a guard's config check)."""
         return len(self._ports)
 
+    def port_problems(self) -> list[dict]:
+        """User-fixable config problems for the configured ports (repair issues).
+
+        A port with no id source can never match a device; a missing actuator or
+        status entity (no loaded state) means its cycle can't run.
+        """
+        problems: list[dict] = []
+        for port in self._ports:
+            label = str(port.get(CONF_LABEL, "?"))
+            if not port.get(CONF_ID_STATIC) and not port.get(CONF_ID_ENTITY):
+                problems.append(
+                    {
+                        "id": f"port_{label}_no_id",
+                        "key": "port_no_id",
+                        "placeholders": {"label": label},
+                    }
+                )
+            for conf in (CONF_ACTUATOR, CONF_STATUS_ENTITY):
+                eid = port.get(conf)
+                if eid and self.hass.states.get(eid) is None:
+                    problems.append(
+                        {
+                            "id": f"port_{label}_entity",
+                            "key": "port_entity_missing",
+                            "placeholders": {"label": label, "entity": eid},
+                        }
+                    )
+        return problems
+
     def resolve_with_reason(self, identifier: str) -> tuple[dict | None, str]:
         """Resolve an id to its port, with a human reason when it can't.
 
