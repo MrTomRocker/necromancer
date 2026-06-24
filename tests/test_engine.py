@@ -179,6 +179,26 @@ async def test_manual_recover_ignored_while_busy(hass, _):
     await eng.async_stop()
 
 
+async def test_manual_recover_during_snooze_lifts_snooze(hass, _):
+    # A manual-recover press while snoozed must LIFT the snooze and recover — not
+    # leave the guard snoozed-but-timerless, deaf to every future health change.
+    health = FakeHealth(hass, Health.OK)
+    driver = StubDriver(hass, on_recover=lambda: setattr(health, "verdict", Health.OK))
+    eng = make(hass, health, driver, boot_window=0)
+    await eng.async_start()
+    eng.snooze(timedelta(seconds=300))
+    assert eng.state is GState.SNOOZED
+    await eng.async_manual_recover()
+    await hass.async_block_till_done()
+    assert eng._snoozed is False  # snooze lifted, not stranded
+    await _advance(hass, 30)  # cooldown elapses -> OK (health is OK)
+    assert eng.state is GState.OK
+    health.verdict = Health.UNHEALTHY
+    eng._evaluate()
+    assert eng.state is GState.SUSPECT  # guard is live again, honoring health
+    await eng.async_stop()
+
+
 async def test_cooldown_to_suspect(hass, _):
     health = FakeHealth(hass, Health.OK)
     driver = StubDriver(hass, on_recover=lambda: setattr(health, "verdict", Health.OK))

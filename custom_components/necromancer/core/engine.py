@@ -633,15 +633,16 @@ class DeviceEngine:
     async def async_manual_recover(self) -> None:
         """Button: force a recovery cycle now (bypasses debounce + auto gate).
 
-        A press while a cycle is already running is ignored — otherwise resetting
-        `attempt` mid-flight would defeat `max_attempts`.
+        An active snooze is lifted — an explicit recover press overrides it. A press
+        while a cycle is already running is ignored — otherwise resetting `attempt`
+        mid-flight would defeat `max_attempts`.
         """
         if self._busy():
             LOGGER.info("%s manual recover ignored — already recovering", self.name)
             return
         LOGGER.info("%s manual recovery requested", self.name)
         self.attempt = 0
-        self._cancel_timer()
+        self._clear_snooze()
         self._start_cycle()
 
     async def _run_recovery_cycle(self) -> None:

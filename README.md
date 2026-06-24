@@ -300,7 +300,7 @@ A few consequences worth knowing:
 - **Auto-recovery off** (the per-guard switch) means *off*: the guard still detects and escalates,
   but never touches anything — not its own recovery, and not following a linked partner (see below).
 - The **manual recover button** forces a cycle right now, bypassing both the debounce and the
-  auto-recovery switch.
+  auto-recovery switch. An active `snooze` is lifted too — an explicit press overrides it.
 
 ## What you get per guarded device
 
@@ -362,7 +362,7 @@ vs "the device is dead").
   **Off ≠ snooze:** with auto off the guard still *detects and escalates* (alarms) but
   won't act; `snooze` goes fully quiet.
 - `button.<guard>_revive` — force a recovery cycle right now, bypassing the debounce and
-  the auto-off gate.
+  the auto-off gate, and lifting an active `snooze`.
 
 ### On your dashboard & in automations
 
