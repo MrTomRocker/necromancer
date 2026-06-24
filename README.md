@@ -263,8 +263,10 @@ Pick the shape that fits the device:
 
 Every recovery has a **Health Check** toggle (on by default). With it on, Necromancer waits until the
 device reports healthy again before declaring success — the boot window and retries below apply. Turn
-it off for **fire-and-forget**: the action runs once and success is assumed (continuous monitoring
-re-triggers if it didn't take). The toggle and its two numbers sit in the *Behaviour* section.
+it off for **fire-and-forget**: the action runs once and is trusted — unless the recovery itself
+reports failure (a recovery action can set `recover_failed`, or an Auto-PoE port that never comes back
+online), which is still a failed attempt. Continuous monitoring re-triggers if a silently-failed action
+didn't take. The toggle and its two numbers sit in the *Behaviour* section.
 
 A **notify-only** guard skips recovery entirely — it just detects the problem and raises the event
 (and optionally notifies). Pick **Notify only** at the top of the strategy step to be told about
@@ -303,7 +305,7 @@ the collapsed *Behaviour* section of the wizard.
 | **Debounce** | 120 s | How long a fault must persist before recovery starts. Absorbs short blips. |
 | **Boot window** | 180 s | How long to wait for the device to report healthy again after the recovery action, before counting the attempt as failed. Set it to the slowest your device takes to come back. |
 | **Cooldown** | 600 s | The pause after a *successful* recovery before the guard returns to `ok`. Prevents tight loops; if the device is still (or again) faulty when the cooldown elapses, the guard re-enters `suspect` (debounce) rather than looping straight back into recovery. |
-| **Max attempts** | 2 | How many times to retry before escalating. (Applies when the Health Check is on; with it off the action runs once, fire-and-forget.) |
+| **Max attempts** | 2 | How many times to retry before escalating. (With the Health Check on, every attempt re-verifies. With it off, an attempt is only retried if the recovery *reports* failure — a clean run is one-shot.) |
 
 A few consequences worth knowing:
 
@@ -676,8 +678,10 @@ second guard, then link them from either guard's **Reconfigure**.
 *silently* — for example Auto-PoE/`repair_poe_port` with an id that might not resolve, or an action
 whose effect you can't otherwise confirm. With the Health Check on, the guard only declares success
 once the device reports healthy again. Turn it off (fire-and-forget) only when the action is
-inherently reliable: success is then assumed, and continuous monitoring re-triggers if it didn't
-take — which can mean one premature "recovered" notification.
+inherently reliable: a clean run is then taken as success — unless the recovery itself reports failure
+(an action can set `recover_failed`, or an Auto-PoE port that never comes back online), which still
+counts as a failed attempt. Continuous monitoring re-triggers if a silently-failed action didn't take —
+which can mean one premature "recovered" notification.
 
 **What happens if Home Assistant restarts mid-recovery?** The in-flight cycle is dropped — on startup
 the guard re-evaluates from live health and takes it from there. Only the lasting verdicts survive a

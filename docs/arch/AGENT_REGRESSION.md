@@ -24,7 +24,7 @@ Diese Checkliste ist dafür gemacht, von einem **Agenten** ausgeführt zu werden
 - **Entity-Slugs** (de-Instanz): `sensor.<slug>_status`, `binary_sensor.<slug>_gesundheit`,
   `switch.<slug>_auto_reparatur`, `button.<slug>_reparieren`; `slug = Name.lower()`.
 - **Beobachten:** schnelle States (RECOVERING/VERIFY) im **Log** asserten (`N.log()`), langsame
-  (SUSPECT/COOLDOWN/OK/ESCALATED) per `N.guard("<slug>")`. **Heil-Trick:** Recovery-Aktion macht die
+  (SUSPECT/BLIND/COOLDOWN/OK/ESCALATED) per `N.guard("<slug>")`. **Heil-Trick:** Recovery-Aktion macht die
   Health-Entity wieder gesund → VERIFY gelingt; schreibt sie nur `input_text.test_note` → VERIFY-Timeout →
   Eskalation. **Jeder Test räumt seine Guards/Ports selbst weg.**
 
@@ -67,7 +67,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Prüft:** Bei 0 Live-Matches vertraut die Fabric dem gecachten Port NUR, wenn dieser gerade nichts meldet; meldet er eine andere Live-id, wird der Cache-Eintrag verworfen und mit „no port matches" abgelehnt (kein Reboot des unschuldigen Nachbarn).
   - **Files:** `custom_components/necromancer/core/poe.py` → `resolve_with_reason`: Zweig `port = self._by_label(self._cache.get(target))` → `occupant = _norm(self._port_id(port))`; `occupant is None` → return cached port (WARNING „not in any port's neighbour data — last-known port"); sonst WARNING „last-known port %r for %r now serves %r — dropping stale cache", `self._cache.pop(target, None)`, return `None, "no port matches '…'"`. Bestätige, dass es KEINEN unbedingten `return port` mehr gibt.
   - **Treiber:** Referenz-Unittest fahren: `Suite `tests/test_poe.py` fahren (Voraussetzungen), Zeile `ok    test_resolve_last_known_skips_occupied_port` suchen`
-  - **Assert:** Zeile `ok    test_resolve_last_known_skips_occupied_port` UND Suite endet mit `16 passed, 0 failed`. Test (test_poe.py) belegt: A war auf P1 gecacht (`cache={"aa:aa":"P1"}`), `sensor.nb1` meldet jetzt `mac=bb:bb` → `p is None`, `"no port matches" in reason`, `f.cache.get("aa:aa") is None` (stale gedroppt).
+  - **Assert:** Zeile `ok    test_resolve_last_known_skips_occupied_port` UND Suite endet mit `20 passed, 0 failed`. Test (test_poe.py) belegt: A war auf P1 gecacht (`cache={"aa:aa":"P1"}`), `sensor.nb1` meldet jetzt `mac=bb:bb` → `p is None`, `"no port matches" in reason`, `f.cache.get("aa:aa") is None` (stale gedroppt).
   - **Cleanup:** — (In-Process-Suite, kein Live-Guard)
 
 - [ ] **B1.2 — Live: gecachter, jetzt fremd-belegter Port wird nicht zyklt** · `P1`
@@ -85,9 +85,9 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **B2.1 — Follow-up-Verify als _cycle_task: Button während Follower-Verify ignoriert** · `P0`
   - **Prüft:** Die nach Leader-Repair gestartete `validate_after_repair` läuft als `engine._cycle_task`, sodass der Busy-Guard greift: ein manueller Recover (Button) mitten im Follower-Verify wird verworfen — kein zweiter, konkurrierender Cycle.
-  - **Files:** `custom_components/necromancer/core/links.py` → `on_partner_repair_done`: `eng._cycle_task = eng.hass.async_create_task(self.validate_after_repair(...))`; `validate_after_repair` setzt `GState.VERIFY`, im `finally` `eng._cycle_task = None`. `core/engine.py` → `async_manual_recover`: `if self._busy(): return`; `_busy` = `self._cycle_task is not None and not self._cycle_task.done()`.
+  - **Files:** `custom_components/necromancer/core/links.py` → `on_partner_repair_done`: `eng._cycle_task = eng.hass.async_create_task(self.validate_after_repair(...))`; `validate_after_repair` setzt `GState.VERIFY`, im `finally` `eng._cycle_task = None`. `core/engine.py` → `async_manual_recover`: `if self._busy() or self._following: return` (mid-Follower-Verify deckt der Busy-Guard, ein Button mitten im Folgen eines Linked-Repair der `_following`-Guard); `_busy` = `self._cycle_task is not None and not self._cycle_task.done()`.
   - **Treiber:** Referenz-Engine-Test fahren: `Suite `tests/test_engine.py` fahren (Voraussetzungen), Zeile `ok    test_validate_after_repair_blocks_manual_recover` suchen`
-  - **Assert:** Zeile `ok    test_validate_after_repair_blocks_manual_recover` + Suite `34 passed, 0 failed`. Test (test_engine.py) belegt: während VERIFY `e2._busy()` True, `async_manual_recover()` → `d2.calls == 0` (kein konkurrierender Cycle), nach Heilung `e2.state is GState.COOLDOWN`, `recover_count == 1`, `d2.calls == 0`.
+  - **Assert:** Zeile `ok    test_validate_after_repair_blocks_manual_recover` + Suite `47 passed, 0 failed`. Test (test_engine.py) belegt: während VERIFY `e2._busy()` True, `async_manual_recover()` → `d2.calls == 0` (kein konkurrierender Cycle), nach Heilung `e2.state is GState.COOLDOWN`, `recover_count == 1`, `d2.calls == 0`.
   - **Cleanup:** —
 
 - [ ] **B2.2 — async_stop bricht Follower-Verify ab, keine Eskalation** · `P0`
@@ -138,7 +138,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **M1.3 — Alle vier Suiten grün (91) = Verhalten unverändert** · `P0`
   - **Prüft:** Die Extraktion ist verhaltenserhaltend — die vollständige In-Process-Suite bleibt grün.
   - **Treiber:** `cd <ha-core> && for t in units poe engine integration; do PYTHONPATH=<ha-core>:<ha-core>/config python tests/test_$t.py 2>&1 | tail -1; done`
-  - **Assert:** Genau diese vier Schlusszeilen: `29 passed, 0 failed` · `16 passed, 0 failed` · `34 passed, 0 failed` · `12/12 checks passed` → Summe 91. Kein `failed`/`FAIL`.
+  - **Assert:** Genau diese vier Schlusszeilen: `33 passed, 0 failed` · `20 passed, 0 failed` · `47 passed, 0 failed` · `12/12 checks passed` → Summe 112. Kein `failed`/`FAIL`.
   - **Cleanup:** —
 
 - [ ] **M1.4 — Live-Smoke: Linking-Verhalten nach Extraktion unverändert** · `P2`
@@ -216,8 +216,8 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 - [ ] **POE-1 — `resolve_with_reason`: 1 / 0 / >1 Match** · `P0`
   - **Prüft:** Genau ein Live-Match → Port (+ Cache-Refresh); 0 Live → last-known Cache; mehrdeutig (>1) → verweigert mit Grund; jeder gemeldete Port-id-Wert per DEBUG auditierbar.
   - **Files:** `core/poe.py` → `resolve_with_reason` (`len(live)==1` → `_learn`+return; `>1` → `f"'{identifier}' matches {len(live)} ports"`; cache-Fallback; sonst `f"no port matches '{identifier}'"`); DEBUG-Trace `core/poe.py` `"PoE %s:   port %r reports id %r"`.
-  - **Treiber:** Abgedeckt durch `test_poe.py::test_resolve_live_single`, `test_resolve_ambiguous`, `test_resolve_last_known`, `test_resolve_none`. Live-Smoke: Port mit `id_entity` anlegen, `N.setstate(id_entity,"aa:bb")`, einen `poe_port`-Guard mit `expected_id="aa:bb"` → `N.guard(...)` `target`-Attribut prüfen.
-  - **Assert:** Status-Sensor-`target` nennt das gelöste Port-Label; bei Mehrdeutigkeit ERROR-Log `"matches 2 ports"` und `can_recover` blockt (Guard → escalated).
+  - **Treiber:** Abgedeckt durch `test_poe.py::test_resolve_live_single`, `test_resolve_ambiguous`, `test_resolve_last_known`, `test_resolve_none`. Live-Smoke: Port mit `id_entity` anlegen, `N.setstate(id_entity,"aa:bb")`, einen `poe_port`-Guard mit `expected_id="aa:bb"` → `N.guard(...)` `recover_driver`-Attribut prüfen.
+  - **Assert:** Status-Sensor-`recover_driver` (= `driver.target_info()`) nennt das gelöste Port-Label; bei Mehrdeutigkeit ERROR-Log `"matches 2 ports"` und `can_recover` blockt (Guard → escalated).
   - **Cleanup:** `N.remove_port("<label>"); N.delete_subentry(...)`
 
 - [ ] **POE-2 — Stale-Cache-Drop bei umgekabeltem Port (B1)** · `P0`
@@ -237,7 +237,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **POE-4 — Service `repair_poe_port` heilt eigenständig + Status-Event** · `P1`
   - **Prüft:** `necromancer.repair_poe_port(id)` löst auf, cyclet und feuert `necromancer_poe_port` (good/recovering/failed) pro Port.
-  - **Files:** `core/poe.py` → `repair`; `core/poe.py` → `_run_cycle` (`_set_status` PORT_RECOVERING→good/failed); `core/poe.py` → `_set_status` feuert `EVENT_PORT_STATUS = f"{DOMAIN}_poe_port"` (**definiert in `core/poe.py`, nicht const.py**); Service-Registrierung in `__init__.py` (has_service-Guard, `_repair_poe_port`, `async_register`).
+  - **Files:** `core/poe.py` → `repair`; `core/poe.py` → `_run_cycle` (`_set_status` PORT_RECOVERING → bei raisendem Aktuator `try/except` setzt `PORT_FAILED` + re-raised, `CancelledError`/`BaseException` durch — also kein „stranded on recovering" mehr; sonst good/failed nach `_cycle`-Verdict); `core/poe.py` → `_set_status` feuert `EVENT_PORT_STATUS = f"{DOMAIN}_poe_port"` (**definiert in `core/poe.py`, nicht const.py**); Service-Registrierung in `__init__.py` (has_service-Guard, `_repair_poe_port`, `async_register`).
   - **Treiber:** Port via `N.add_port({...})`, dann `N.call("necromancer","repair_poe_port",id="<expected_id>")`. `N.log()`.
   - **Assert:** Log `"PoE port"` mit Statuswechsel; Actuator-Entität wurde off/on geschaltet; Service-Status 200.
   - **Cleanup:** `N.remove_port("<label>")`
@@ -262,6 +262,13 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Treiber:** Abgedeckt durch `test_poe.py::test_relearn_recable_updates_cache`. Live schwer provozierbar (echte MAC umstecken) → nur Smoke.
   - **Assert:** `test_relearn_recable_updates_cache` grün; bei echtem Umstecken genau eine `"moved port"`-WARNING.
   - **Cleanup:** —
+
+- [ ] **POE-8 — Raisender Aktuator → Port terminal `failed` (nicht „stranded on recovering")** · `P1`
+  - **Prüft:** Wirft der Aktuator/`_cycle` mitten im Power-Cycle, bleibt der Port nicht auf `recovering` hängen: `_run_cycle` umschließt `_cycle` mit `try/except` → setzt `PORT_FAILED`, loggt und re-raised (der Caller/Driver sieht den Fehler); `CancelledError` (BaseException) geht ungefangen durch.
+  - **Files:** `core/poe.py` → `_run_cycle` (`try: ok = await self._cycle(port)` / `except Exception: self._set_status(label, PORT_FAILED); LOGGER.exception("PoE port %r: repair raised"); raise`).
+  - **Treiber:** Port mit nicht existierendem Actuator anlegen: `N.add_port({"label":"RaisePort","actuator":"switch.gibt_es_nicht","status_entity":"binary_sensor.test_reachable","status_on":["on"],"status_off":["off"],"off_on_delay":1})`; `N.call("necromancer","repair_poe_port",id="<id>")` (id muss auf RaisePort auflösen — sonst `id_static` setzen) → `N.log()`.
+  - **Assert:** `N.log()` enthält `"RaisePort"` mit `"repair raised"`; Port-Status endet `failed` (Event `necromancer_poe_port` mit `status=="failed"`), NICHT `recovering`. HA bleibt RUNNING.
+  - **Cleanup:** `N.remove_port("RaisePort")`.
 
 ### P0 — Pitfall-Fixes F1–F6 + CC7
 
@@ -304,9 +311,9 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **AUTO-1 — Automatisierte Suiten laufen grün (29/16/34/7)** · `P0`
   - **Prüft:** Die vier Real-HA-core-Suiten (`tests.common.async_test_home_assistant`) sind grün und decken PoE resolve/cycle/coalescing/Platzhalter, Engine-State-Machine + Persistenz, Health-Registry-Events inkl. Template-Blind-Erkennung (B3), Linking-Koordination ab.
-  - **Files:** `tests/test_units.py` (29), `test_poe.py` (16), `test_engine.py` (34), `test_integration.py` (7 Test-Funktionen / 12 `ok(...)`-Checks). Health-Tests u. a. `test_health_self_reference_warns`, `test_health_template_all_missing_is_blind`, `test_health_template_partial_missing_warns_only`. Linking-Tests u. a. `test_engine.py::test_linked_follower_recovers_with_leader`, `test_linked_follower_escalates_when_leader_fails`, `test_linked_auto_off_follower_escalates`, `test_leader_stop_does_not_escalate_follower`, `test_debounce_arbitration_second_follows`.
+  - **Files:** `tests/test_units.py` (33), `test_poe.py` (20), `test_engine.py` (47), `test_integration.py` (7 Test-Funktionen / 12 `ok(...)`-Checks). Health-Tests u. a. `test_health_self_reference_warns`, `test_health_template_all_missing_is_blind`, `test_health_template_partial_missing_warns_only`. Linking-Tests u. a. `test_engine.py::test_linked_follower_recovers_with_leader`, `test_linked_follower_escalates_when_leader_fails`, `test_linked_auto_off_follower_escalates`, `test_leader_stop_does_not_escalate_follower`, `test_debounce_arbitration_second_follows`.
   - **Treiber:** Aus `<ha-core>`: `PYTHONPATH=<ha-core>:<ha-core>/config python -m pytest tests -q` (in-process, kein laufender Server nötig).
-  - **Assert:** `test_units` 29, `test_poe` 16, `test_engine` 34 passed; `test_integration` grün (7 Test-Funktionen → `12/12 checks passed`). Gesamt **kein** FAIL/ERROR.
+  - **Assert:** `test_units` 33, `test_poe` 20, `test_engine` 47 passed; `test_integration` grün (7 Test-Funktionen → `12/12 checks passed`). Gesamt **kein** FAIL/ERROR.
   - **Cleanup:** —
   - *Hinweis: Doc-Zähler 18/16/30/„7" sind STALE → korrigiert auf 29/16/34/7.*
 
@@ -402,15 +409,15 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Cleanup:** — (Flow nicht abgeschlossen).
 
 - [ ] **ST2 — switch: off→delay→on Power-Cycle** · `P0`
-  - **Prüft:** Strategie `switch` baut `switch_cycle`-Driver (homeassistant.turn_off → off_on_delay → turn_on). Ohne Health-Check ⇒ sofort recover_success.
-  - **Files:** `config_flow_helpers/schemas.py` → `_build_driver` (`switch_cycle`), `core/drivers/switch_cycle.py` → `recover`.
+  - **Prüft:** Strategie `switch` baut `switch_cycle`-Driver (homeassistant.turn_off → off_on_delay → turn_on). Ohne Health-Check entscheidet das Driver-Verdict (Model B): `switch_cycle.recover()` liefert `True` (scheitert nur bei Exception) ⇒ recover_success.
+  - **Files:** `config_flow_helpers/schemas.py` → `_build_driver` (`switch_cycle`), `core/drivers/switch_cycle.py` → `recover` (returnt `True`, außer es wirft).
   - **Treiber:** `N.setstate("switch.test_template_switch","on")`; `eid,sub=N.create_guard({"source_type":"state_based","name":"STswitch","health":{"entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"switch","switch_entity":"switch.test_template_switch","off_on_delay":1,"behavior":{"debounce":1,"cooldown":3}})`; `N.setstate("input_boolean.test_1","off"); N.wait(4)`.
   - **Assert:** `N.log()` enthält `"STswitch recovery attempt 1/"` und `"STswitch recovered after 1 attempt(s)"`; danach `N.guard("stswitch")[0]` in `("cooldown","ok")`; `attrs["recover_count"]>=1`.
   - **Cleanup:** `N.delete_subentry(eid,sub)`; `N.setstate("input_boolean.test_1","on")`.
 
-- [ ] **ST3 — action (ohne Check): eine Sequenz, fire-and-forget** · `P0`
-  - **Prüft:** Strategie `action` baut `action_call`-Driver; ohne Health-Check führt EIN recover() sofort zu recover_success ohne VERIFY.
-  - **Files:** `config_flow_helpers/schemas.py` → `_build_driver` (`action_call`), `core/engine.py` (`if not health_check: _recover_success()`).
+- [ ] **ST3 — action (ohne Check): eine Sequenz, Driver-Verdict entscheidet** · `P0`
+  - **Prüft:** Strategie `action` baut `action_call`-Driver; ohne Health-Check entscheidet das Driver-Verdict (Model B) ohne VERIFY: `action_call.recover()` liefert `True` (= `not result.get("recover_failed")`) → recover_success. Setzt die Aktion `recover_failed` (oder wirft), gilt der Versuch als gescheitert → retry/escalate.
+  - **Files:** `config_flow_helpers/schemas.py` → `_build_driver` (`action_call`), `core/drivers/action_call.py` → `recover` (`not result.get("recover_failed")`), `core/engine.py` `_run_recovery_cycle` (`if not health_check:` → `driver_ok` entscheidet recover_success/retry).
   - **Treiber:** `eid,sub=N.create_guard({"source_type":"state_based","name":"STact","health":{"entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"action","action":[{"service":"input_text.set_value","data":{"entity_id":"input_text.test_note","value":"fired"}}],"behavior":{"debounce":1,"cooldown":3}})`; `N.setstate("input_boolean.test_1","off"); N.wait(3)`.
   - **Assert:** `N.st("input_text.test_note")["state"]=="fired"`; `N.log()` enthält `"STact recovered after 1 attempt(s)"` (kein VERIFY-Zustand, da Check aus).
   - **Cleanup:** `N.delete_subentry(eid,sub)`; `N.setstate("input_boolean.test_1","on")`.
@@ -431,7 +438,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
 
 - [ ] **ST5 — poe_port: Resolver findet Port per expected_id** · `P0`
   - **Prüft:** Strategie `poe_port` baut dünnen Adapter; Driver delegiert resolve+cycle an die Fabric, findet Port über `expected_id` in der flachen Liste.
-  - **Files:** `config_flow_helpers/schemas.py` → `_build_driver` (`poe_port`,`expected_id`); `core/drivers/poe_port.py` → `can_recover` (`fabric.resolve_with_reason`), `target_info` `config_errors`.
+  - **Files:** `config_flow_helpers/schemas.py` → `_build_driver` (`poe_port`,`expected_id`); `core/drivers/poe_port.py` → `can_recover` (`fabric.resolve_with_reason`), `recover` (returnt das Fabric-Verdict `fabric.repair(...)` = Port-online-bestätigt), `target_info` `config_errors`.
   - **Treiber:** Port anlegen: `N.add_port({"label":"STport","actuator":"input_boolean.sim_poe_port","id_static":"st-mac-1","status_entity":"input_boolean.sim_device_power","status_on":["on"],"status_off":["off"],"off_on_delay":1})`; `N.setstate("input_boolean.sim_device_power","on")`; Guard: `eid,sub=N.create_guard({"source_type":"state_based","name":"STpoe","health":{"entity_id":"input_boolean.test_1","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"poe_port","expected_id":"st-mac-1","behavior":{"debounce":1,"boot_window":5,"cooldown":3,"max_attempts":2}})`; `N.setstate("input_boolean.test_1","on")`.
   - **Assert:** Guard kommt sauber hoch: `N.guard("stpoe")[0]=="ok"`; `N.log()` enthält für STpoe KEIN `"no ports configured"`, KEIN `"no port matches 'st-mac-1'"` und KEIN `"matches"` (resolve fand `st-mac-1`).
   - **Cleanup:** `N.delete_subentry(eid,sub)`; `N.remove_port("STport")`.
@@ -651,7 +658,7 @@ Priorität: **P0** = nach Refactors zwingend · **P1** = wichtig · **P2** = Kü
   - **Prüft:** Submit-Form `{section:{feld:…}}` wird vor Verwendung flachgezogen, sodass der Guard real entsteht (Recover-Step-Sektionen + die noch verschachtelt postenden Testkit-Device-Keys verarbeitet).
   - **Files:** `config_flow_helpers/schemas.py` → `_flatten_sections` `out.update(value)` für jedes dict; aufgerufen in `config_flow.py` `async_step_device` und `async_step_add_port` sowie in `config_flow_helpers/schemas.py` `_build_data`.
   - **Treiber:** `hub,sub=N.create_guard({"source_type":"state_based","name":"FlatDev","health":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"switch","switch_entity":"switch.test_template_switch","behavior":{"debounce":5,"cooldown":5}})` — der Device-Step ist FLACH, aber das Testkit postet aus Altgründen noch verschachtelt (`state_check`/`assigned_device`), was `_flatten_sections` hochzieht; die Switch-Step-Sektionen `behavior`/`notification` werden ebenso geflattet.
-  - **Assert:** `N.st("sensor.flatdev_status")` ist nicht `None` (Guard entstand → verschachtelte Werte wurden geflattet/verarbeitet). Der Switch-Wert kam aus der `power`-losen Flat-Form: `N.guard("flatdev")[1]["target"] == "switch.test_template_switch"` (Status-Sensor-Attr `target`=`driver.target_info()`). Health beobachtbar: `N.setstate("binary_sensor.test_reachable","off")`; `N.wait(1)`; `N.st("binary_sensor.flatdev_gesundheit")["state"]=="off"`. (Es gibt **kein** `health`-Attribut am Status-Sensor — Attrs sind nur `attempt/recover_count/last_recover/last_seen/target/auto_restart`.)
+  - **Assert:** `N.st("sensor.flatdev_status")` ist nicht `None` (Guard entstand → verschachtelte Werte wurden geflattet/verarbeitet). Der Switch-Wert kam aus der `power`-losen Flat-Form: `N.guard("flatdev")[1]["recover_driver"] == "switch.test_template_switch"` (Status-Sensor-Attr `recover_driver`=`driver.target_info()`). Health beobachtbar: `N.setstate("binary_sensor.test_reachable","off")`; `N.wait(1)`; `N.st("binary_sensor.flatdev_gesundheit")["state"]=="off"`. (Es gibt **kein** `health`-Attribut am Status-Sensor — Attrs sind `attempt/recover_count/fail_count/last_recover/last_fail/recover_driver/last_recover_driver_result/last_recover_driver_time/snooze_until`.)
   - **Cleanup:** `N.delete_subentry(hub,sub)`; `N.setstate("binary_sensor.test_reachable","on")`.
 
 - [ ] **SF3 — _flatten_sections beim Port-Add (Options-Flow)** · `P1`
@@ -753,8 +760,8 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 ### P0 — Persistenz (Store)
 
 > Store-Datei: `<ha-core>/config/.storage/necromancer.<entry_id>` (`entry_id` via `N.hub_id()`).
-> Snapshot-Felder (core/engine.py `snapshot`): `state, attempt, recover_count, last_recover, last_seen, auto, snooze_until`.
-> Restore-Regel (core/engine.py `_apply_persisted`): Stats (`recover_count`/`last_recover`/`last_seen`) + `auto` IMMER; `state` NUR wenn `ESCALATED` (bzw. `SNOOZED`); transiente States werden verworfen und aus Live-Health neu abgeleitet.
+> Snapshot-Felder (core/engine.py `snapshot`): `state, attempt, recover_count, fail_count, last_recover, last_seen, last_fail, last_recover_driver_result, last_recover_driver_time, auto, snooze_until`.
+> Restore-Regel (core/engine.py `_apply_persisted`): Stats (`recover_count`/`fail_count`/`last_recover`/`last_seen`/`last_fail`/`last_recover_driver_result`/`last_recover_driver_time`) + `auto` IMMER; `state` NUR wenn `ESCALATED` (bzw. `SNOOZED`); transiente States werden verworfen und aus Live-Health neu abgeleitet.
 > Speicher ist verzögert (`SAVE_DELAY=5`, const.py) → vor Restart `N.wait(7)` bzw. Unload flusht synchron (`async_unload_entry` → `store.async_save(serialize())`, __init__.py).
 > RESTART-Helfer (Code-/Store-Last neu laden): `pkill -9 -f "[h]omeassistant -c"; relaunch; poll /api/config==RUNNING`.
 
@@ -778,6 +785,13 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Treiber:** `N.create_guard({source_type:"state_based", name:"PersStat", health:{entity_id:"input_boolean.test_5", on_value:["on"], off_value:["off"]}, mode:"recover", strategy:"action_check", action:[{"service":"input_boolean.turn_on","data":{"entity_id":"input_boolean.test_5"}}], behavior:{debounce:3,cooldown:4,boot_window:6,max_attempts:2}})` → `N.call("input_boolean","turn_off",entity_id="input_boolean.test_5")` (Health off → Recovery-Aktion schaltet test_5 wieder on → VERIFY grün → COOLDOWN) → `N.wait(10)` → `N.guard("persstat")[1]["recover_count"]` soll `1` sein → `N.wait(7)` (Flush) → RESTART.
   - **Assert:** Nach Restart `N.guard("persstat")[1]["recover_count"] == 1`.
   - **Cleanup:** Subentry `"PersStat"` löschen + `N.call("input_boolean","turn_on",entity_id="input_boolean.test_5")`.
+
+- [ ] **PERS-3b — Failure-Stats (`fail_count`/`last_fail`) + Driver-Ergebnis überleben Neustart** · `P0`
+  - **Prüft:** Ein gescheitertes Guard persistiert `fail_count`/`last_fail` (bei echtem Misserfolg: recovery_failed/recovery_blocked/linked_repair_failed, NICHT no_auto_recovery) und das je Versuch aufgezeichnete Driver-Verdict (`last_recover_driver_result` ∈ `good`/`failed`, `last_recover_driver_time`); alle kommen nach Neustart unverändert hoch.
+  - **Files:** core/engine.py `_record_failure` (`fail_count += 1`, `last_fail`), aufgerufen in `_escalate` + `validate_after_repair` (linked_repair_failed); `_record_driver_result` (`"good"`/`"failed"` je `recover()`-Verdict, `last_recover_driver_time`) + `snapshot` (`fail_count`/`last_fail`/`last_recover_driver_result`/`last_recover_driver_time`) + `_apply_persisted`. Hinweis: der Auto-aus-Pfad (`_debounce_done` → `_set_state(ESCALATED)`) ruft `_escalate` NICHT → kein `fail_count`-Bump.
+  - **Treiber:** Guard wie PERS-1 deterministisch eskalieren lassen (`{...name:"PersFail", strategy:"action_check", action: schreibt nur Note, max_attempts:1, boot_window:4...}`) → `N.wait(12)` → `N.guard("persfail")` zeigt `escalated` mit `attrs["fail_count"]>=1` → `N.wait(7)` (Flush) → RESTART.
+  - **Assert:** Nach Restart `N.guard("persfail")[1]["fail_count"] >= 1`, `attrs["last_fail"]` gesetzt, `attrs["last_recover_driver_result"]` in `("good","failed")` (hier `"good"`: die Aktion lief, nur VERIFY scheiterte) und `attrs["last_recover_driver_time"]` gesetzt.
+  - **Cleanup:** Subentry `"PersFail"` löschen.
 
 - [ ] **PERS-4 — `auto`-Flag (Auto-Reparatur aus) überlebt Neustart** · `P0`
   - **Prüft:** Der Laufzeit-Switch „Auto-Reparatur" persistiert seinen Wert (core/engine.py `set_auto` `snapshot` restore) und kommt nach Neustart als „aus" hoch.
@@ -894,11 +908,41 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Automatisiert:** `test_integration.py::test_health_template_all_missing_is_blind` (ERROR-Pfad) + `::test_health_template_partial_missing_warns_only` (nur WARNING, kein false-blind).
   - **Cleanup:** Subentry `"CfgBlind"` löschen.
 
+### P1 — Repairs (issue_registry)
+
+> Dieselben Config-Probleme, die `_check_config` als ERROR/WARNING loggt, werden zusätzlich als
+> strukturierte Repairs angelegt. Quelle: `engine.config_problems()` (je Guard) + `fabric.port_problems()`
+> (je Port); `__init__.py` `_reconcile_issues()` legt/löscht die Issues idempotent an. Beobachten per
+> REST: `N.g("/api/repairs/issues")["issues"]` nach `domain=="necromancer"` filtern (oder WS
+> `repairs/list_issues`). Severities: `health_entity_missing`/`health_entity_disabled`/`health_template_blind`/
+> `recovery_action_invalid` = ERROR, `port_no_id` = WARNING, `port_entity_missing` = ERROR.
+
+- [ ] **REP-1 — Fehlende Health-Entity → Repair-Issue (health_entity_missing)** · `P1`
+  - **Prüft:** Ein Guard auf eine nicht existierende Health-Entity erzeugt — zusätzlich zum ERROR-Log (HR-1) — ein Repair-Issue `health_entity_missing`; behebt man die Config (Reload), verschwindet es wieder.
+  - **Files:** `core/engine.py` → `config_problems` (`health_entity_missing`/`health_entity_disabled`; bei Template `health_template_blind`, wenn ALLE referenzierten Entities weg; `recovery_action_invalid` aus `driver.config_errors()`); `__init__.py` → `_reconcile_issues` (legt via `ir.async_create_issue` an, `is_fixable=False`, severity aus `_ISSUE_SEVERITY`; löscht nicht-mehr-gewünschte) + `_validate_configs` (geplant via `async_at_started`) + `_on_watched_change` (re-reconcile bei Existenz-Transition einer beobachteten Entity); `translations/{en,de}.json` `issues`-Block (Keys s. o.).
+  - **Treiber:** `N.create_guard({source_type:"state_based", name:"RepMissing", health:{entity_id:"binary_sensor.does_not_exist_rep"}, mode:"recover", strategy:"switch", switch_entity:"switch.test_template_switch", behavior:{debounce:3,cooldown:5}})` → `N.wait(3)` → `N.g("/api/repairs/issues")`.
+  - **Assert:** Unter den Issues existiert eins mit `domain=="necromancer"`, `translation_key=="health_entity_missing"`, `severity=="error"` und `issue_id` endend auf `_health_entity_missing` (id = `<subentry_id>_health_entity_missing`); `translation_placeholders` enthält `name`/`entity`.
+  - **Cleanup:** Subentry `"RepMissing"` löschen → `N.wait(3)` → Issue verschwindet (Reconcile bei Reload).
+
+- [ ] **REP-2 — Port ohne id-Quelle → WARNING-Issue (port_no_id); fehlende Port-Entity → ERROR (port_entity_missing)** · `P1`
+  - **Prüft:** `fabric.port_problems()` meldet einen Port ohne id-Quelle (`port_no_id`, WARNING) und einen Port mit nicht geladener actuator-/status-Entity (`port_entity_missing`, ERROR) als Repairs.
+  - **Files:** `core/poe.py` → `port_problems` (`port_no_id` wenn weder `id_static` noch `id_entity`; `port_entity_missing` je `actuator`/`status_entity` ohne `hass.states`); `__init__.py` → `_reconcile_issues` (mischt Port-Probleme zu den Guard-Problemen) + `_ISSUE_SEVERITY` (`port_no_id`=WARNING, `port_entity_missing`=ERROR).
+  - **Treiber:** Port ohne id anlegen: `N.add_port({"label":"RepPort","actuator":"switch.gibt_es_nicht_rep","status_entity":"binary_sensor.test_reachable"})` (keine `id_static`/`id_entity` → port_no_id; fehlender Actuator → port_entity_missing) → `N.wait(3)` → `N.g("/api/repairs/issues")`.
+  - **Assert:** Ein Issue `translation_key=="port_no_id"` (`severity=="warning"`, `issue_id` enthält `RepPort`, placeholder `label`) UND eins `translation_key=="port_entity_missing"` (`severity=="error"`, placeholders `label`/`entity`).
+  - **Cleanup:** `N.remove_port("RepPort")` → `N.wait(3)` → Issues verschwinden.
+
+- [ ] **REP-3 — Integration entfernen räumt die Issues (async_remove_entry)** · `P2`
+  - **Prüft:** Bei Entfernen der Integration werden die (non-persistenten) Repair-Issues aktiv gelöscht, statt bis zum nächsten Neustart in Repairs zu hängen.
+  - **Files:** `__init__.py` → `async_remove_entry` (löscht alle `DOMAIN`-Issues, deren `translation_key` in `_ISSUE_SEVERITY` liegt).
+  - **Treiber:** Datei-basiert bestätigen (Live: Integration entfernen ist destruktiv) — `async_remove_entry` iteriert `reg.issues` und ruft `ir.async_delete_issue` für jeden eigenen Key.
+  - **Assert:** `async_remove_entry` filtert `dom == DOMAIN and issue.translation_key in _ISSUE_SEVERITY` und löscht alle; keine necromancer-Issues bleiben nach Removal.
+  - **Cleanup:** —
+
 ### Hinweis zum doc-internen Zählerstand
 
 - [ ] **DOC-1 — Suite-Zählerstand im Regressions-Doc aktualisieren** · `P2`
   - **Prüft:** Der Header von REGRESSION.md nennt veraltete Testzahlen und veraltete „lock"-Formulierung.
-  - **Files:** REGRESSION.md Header („51 automatisierte Tests grün") + die Suite-Aufschlüsselungszeile („test_units (18) · test_poe (15) · test_engine (10) · test_integration (8) = 51 grün") + die Zeile mit dem Wort „lock". Aktuell: `test_units=29 · test_poe=16 · test_engine=34 · test_integration=12-checks (7 Funktionen)` → Summe 91; PoE-Per-Port-`Lock` wurde ENTFERNT → durch **Coalescing** (`_inflight`-Task + `asyncio.shield`) ersetzt → „lock/Platzhalter" auf „Coalescing/Platzhalter" umtexten.
+  - **Files:** REGRESSION.md Header („51 automatisierte Tests grün") + die Suite-Aufschlüsselungszeile („test_units (18) · test_poe (15) · test_engine (10) · test_integration (8) = 51 grün") + die Zeile mit dem Wort „lock". Aktuell: `test_units=33 · test_poe=20 · test_engine=47 · test_integration=12-checks (7 Funktionen)` → Summe 112; PoE-Per-Port-`Lock` wurde ENTFERNT → durch **Coalescing** (`_inflight`-Task + `asyncio.shield`) ersetzt → „lock/Platzhalter" auf „Coalescing/Platzhalter" umtexten.
   - **Assert:** Header-/Suite-Aufschlüsselungszeilen auf die aktuellen Zahlen korrigiert (29/16/34/12-checks = 91); die „lock"-Zeile ersetzt „lock" durch „coalescing".
   - **Cleanup:** —
 
@@ -956,9 +1000,9 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Assert:** `N.log()` enthält `"SMHappy unhealthy, waiting"`, `"SMHappy debounce elapsed, starting recovery"`, `"SMHappy recovered after"`; nach Cooldown `N.guard("smhappy")[0]=="ok"` und `attrs["recover_count"]==1`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
-- [ ] **SM2 — Manueller Recover via Button umgeht Debounce + Auto-Gate** · `P1`
-  - **Prüft:** `button.<slug>_reparieren` ruft `async_manual_recover` → `attempt=0` + sofortiger `_start_cycle`, ohne Debounce und ohne Auto-aus-Gate; Doppelpress während Cycle ignoriert (Busy-Guard `_busy()`).
-  - **Files:** `core/engine.py` → `async_manual_recover` (Busy-Guard `_busy()`); `button.py` → `RecoverButton.async_press`.
+- [ ] **SM2 — Manueller Recover via Button umgeht Debounce + Auto-Gate, lüftet Snooze, folgt nicht mid-Link** · `P1`
+  - **Prüft:** `button.<slug>_reparieren` ruft `async_manual_recover` → `attempt=0` + `_clear_snooze()` (ein expliziter Druck hebt einen aktiven Snooze auf) + sofortiger `_start_cycle`, ohne Debounce und ohne Auto-aus-Gate; Doppelpress während Cycle ignoriert (Busy-Guard `_busy()`), und ein Druck während des Folgens einer Linked-Repair ignoriert (Guard auf `self._following`).
+  - **Files:** `core/engine.py` → `async_manual_recover` (`if self._busy() or self._following: return`; dann `attempt=0`, `_clear_snooze()`, `_start_cycle()`); `button.py` → `RecoverButton.async_press`.
   - **Treiber:** Guard wie SM1 (`"name":"SMManual"`, großer `"debounce":600`). `N.call("input_boolean","turn_off","entity_id","input_boolean.test_5")`; `N.wait(1)` → bleibt SUSPECT (Debounce nicht abgelaufen). `N.call("button","press","entity_id","button.smmanual_reparieren")`. `N.wait(2)`; `N.guard("smmanual")`.
   - **Assert:** `N.log()` enthält `"SMManual manual recovery requested"` und `"SMManual recovered after"`; `N.guard("smmanual")[0]` in `("cooldown","ok")`.
   - **Cleanup:** `N.delete_subentry(eid, sid)`
@@ -985,10 +1029,17 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Cleanup:** `N.delete_subentry(eid, sid)`
 
 - [ ] **SM6 — actions-Strategie: Aus-Aktion → Delay → Ein-Aktion** · `P1`
-  - **Prüft:** `actions`-Strategie (ohne `_check`) führt getrennte off- und on-Sequenzen mit `off_on_delay` aus (Driver `action_cycle`); ohne Check sofortiger `_recover_success`.
+  - **Prüft:** `actions`-Strategie (ohne `_check`) führt getrennte off- und on-Sequenzen mit `off_on_delay` aus (Driver `action_cycle`); ohne Check entscheidet das Driver-Verdict (Model B): `action_cycle.recover()` liefert `True` (= `not on_vars.get("recover_failed")`) → `_recover_success`.
   - **Treiber:** Guard `"source_type":"state_based","name":"SMActions"`, `"health":{"entity_id":"input_boolean.test_5","on_value":["on"],"off_value":["off"]}`, `"mode":"recover"`, `"strategy":"actions"`, `"off_action":[{"service":"input_boolean.turn_off","data":{"entity_id":"input_boolean.test_6"}}]`, `"on_action":[{"service":"input_boolean.turn_on","data":{"entity_id":"input_boolean.test_6"}}]`, `"off_on_delay":2`, `"behavior":{"debounce":1,"cooldown":3}` (ohne `_check` → kein boot_window/max_attempts). Health (`input_boolean.test_5`) brechen; `N.wait(5)`; `N.st("input_boolean.test_6")`.
   - **Assert:** `N.log()` enthält `"SMActions recovery attempt 1"`; `input_boolean.test_6` endet `state=="on"` (Ein-Aktion lief nach off+delay).
   - **Cleanup:** `N.delete_subentry(eid, sid)`
+
+- [ ] **SM7 — BLIND: Health UNKNOWN beim Leerlauf → `blind` statt stale `ok`, kein Recover** · `P1`
+  - **Prüft:** Liest die Health beim idlen Überwachen UNKNOWN (Quelle unavailable / Template-Render-Fehler), zeigt der Guard `blind` statt eines veralteten `ok` — KEIN Recovery (UNKNOWN ist nie ein Fehler). Liest die Health wieder, kehrt er nach `ok`/`suspect` zurück. Nur aus OK/SUSPECT/BLIND heraus; mitten in der Recovery (RECOVERING/VERIFY/COOLDOWN/ESCALATED/SNOOZED) wird NICHT blind (ein Gerät liest mid-reboot kurz UNKNOWN).
+  - **Files:** `core/engine.py` → `_evaluate` (`if h == Health.UNKNOWN:` → in OK/SUSPECT `_cancel_timer()` + `_set_state(GState.BLIND)`, sonst nur `_emit()`; spätere Edges `OK/BLIND + UNHEALTHY → _enter_suspect`, `SUSPECT/BLIND + OK → OK`); `core/state.py` → `GState.BLIND` (Reihenfolge: ok, suspect, **blind**, recovering, …).
+  - **Treiber:** `N.setstate("binary_sensor.test_reachable","on")`; `eid,sid=N.create_guard({"source_type":"state_based","name":"SMBlind","health":{"entity_id":"binary_sensor.test_reachable","on_value":["on"],"off_value":["off"]},"mode":"recover","strategy":"switch","switch_entity":"switch.test_template_switch","behavior":{"debounce":2,"cooldown":3}})` → `N.guard("smblind")[0]=="ok"`. Quelle „blind" machen: `N.setstate("binary_sensor.test_reachable","unavailable")`; `N.wait(1)`; `N.guard("smblind")`. Wieder lesbar: `N.setstate("binary_sensor.test_reachable","on")`; `N.wait(1)`.
+  - **Assert:** Nach `unavailable` `N.guard("smblind")[0]=="blind"` (nicht `ok`, nicht `suspect`); `attrs["recover_count"]==0` und im `N.log()` KEIN `"SMBlind recovery attempt"` (kein Recover bei UNKNOWN). Nach `on` wieder `N.guard("smblind")[0]=="ok"`.
+  - **Cleanup:** `N.delete_subentry(eid, sid)`; `N.setstate("binary_sensor.test_reachable","on")`.
 
 ### P1 — Notify (i18n)
 
@@ -1084,11 +1135,11 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Assert:** `N.st("button.kosbtn_reparieren")≠None`; `N.st("button.kosbtn_recover")==None`.
   - **Cleanup:** `N.delete_subentry(eid,sid)`
 
-- [ ] **KOS3 — Status-Sensor lokalisiert alle 7 GState-Werte** · `P2`
-  - **Prüft:** Die 7 Zustände ok/suspect/recovering/verify/cooldown/escalated/snoozed haben de-Übersetzungen unter `entity.sensor.status.state`.
-  - **Files:** `translations/de.json` → `entity.sensor.status.state` (alle 7 Keys, verifiziert); `core/state.py` → `GState`.
+- [ ] **KOS3 — Status-Sensor lokalisiert alle 8 GState-Werte** · `P2`
+  - **Prüft:** Die 8 Zustände ok/suspect/blind/recovering/verify/cooldown/escalated/snoozed haben de-Übersetzungen unter `entity.sensor.status.state`.
+  - **Files:** `translations/de.json` → `entity.sensor.status.state` (alle 8 Keys, verifiziert; `blind`=`"Blind"`, EN ebenfalls `"Blind"`); `core/state.py` → `GState`.
   - **Treiber:** Datei-basiert.
-  - **Assert:** Die 7 Keys `ok/suspect/recovering/verify/cooldown/escalated/snoozed` existieren in de.json (verifiziert vorhanden).
+  - **Assert:** Die 8 Keys `ok/suspect/blind/recovering/verify/cooldown/escalated/snoozed` existieren in de.json (verifiziert vorhanden).
   - **Cleanup:** „—"
 
 ### Nach Refactors zuerst prüfen
@@ -1155,7 +1206,7 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Prüft:** Der neue PoE-Unit-Test für B1 ist vorhanden und im Lauf grün (Regressionsanker für die Stale-Cache-Logik).
   - **Files:** `tests/test_poe.py` → `test_resolve_last_known_skips_occupied_port` (asserts `p is None`, `"no port matches"`, `f.cache.get("aa:aa") is None`).
   - **Treiber:** `uv run python` aus `<ha-core>` mit `PYTHONPATH=<ha-core>:<ha-core>/config` → `python tests/test_poe.py`.
-  - **Assert:** Ausgabe enthält `ok    test_resolve_last_known_skips_occupied_port` und Schlusszeile `16 passed, 0 failed`.
+  - **Assert:** Ausgabe enthält `ok    test_resolve_last_known_skips_occupied_port` und Schlusszeile `20 passed, 0 failed`.
   - **Cleanup:** —
 
 - [ ] **GAP-B2a — Reload mitten im Recovery-Zyklus eskaliert Follower NICHT (Datei-Marker)** · `P0`
@@ -1169,20 +1220,20 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
   - **Prüft:** Beim Teardown wird Follower-State (`following`/`leader`) zurückgesetzt, damit ein neu geladener Guard nicht als „hängender Follower" startet.
   - **Files:** `core/engine.py` → `async_stop` `self.links.reset()`; `core/links.py` → `LinkCoordinator.reset` (`following=False; leader=None`).
   - **Treiber:** Engine-Suite ist der Anker — `python tests/test_engine.py`; relevante Fälle `test_async_stop_cancels_validate_no_escalation`, `test_leader_stop_does_not_escalate_follower`.
-  - **Assert:** Ausgabe enthält `ok    test_async_stop_cancels_validate_no_escalation` und `ok    test_leader_stop_does_not_escalate_follower`; `34 passed, 0 failed`.
+  - **Assert:** Ausgabe enthält `ok    test_async_stop_cancels_validate_no_escalation` und `ok    test_leader_stop_does_not_escalate_follower`; `47 passed, 0 failed`.
   - **Cleanup:** —
 
 - [ ] **GAP-M1a — GState aus core/state.py ausgelagert, engine re-exportiert weiterhin** · `P0`
   - **Prüft:** Nach dem M1-Refactor ist `GState` in `core/state.py` und sowohl `from .engine import GState` als auch `from .state import GState` funktionieren (sensor.py + Tests hängen an `engine.GState`).
-  - **Files:** `core/state.py` → `class GState(StrEnum)` (7 Werte); `core/engine.py` `from .state import GState` (macht `engine.GState` verfügbar); `sensor.py` `from .core.engine import DeviceEngine, GState`.
+  - **Files:** `core/state.py` → `class GState(StrEnum)` (8 Werte); `core/engine.py` `from .state import GState` (macht `engine.GState` verfügbar); `sensor.py` `from .core.engine import DeviceEngine, GState`.
   - **Treiber:** `uv run python -c "import sys; sys.path.insert(0,'repo'); from custom_components.necromancer.core.engine import GState as A; from custom_components.necromancer.core.state import GState as B; print(A is B, [s.value for s in A])"` (aus `<ha-core>`, PYTHONPATH gesetzt).
-  - **Assert:** Ausgabe `True ['ok', 'suspect', 'recovering', 'verify', 'cooldown', 'escalated', 'snoozed']`.
+  - **Assert:** Ausgabe `True ['ok', 'suspect', 'blind', 'recovering', 'verify', 'cooldown', 'escalated', 'snoozed']`.
   - **Cleanup:** —
 
 - [ ] **GAP-M1b — Status-Sensor lädt + ENUM-Optionen korrekt (Live)** · `P0`
-  - **Prüft:** Nach dem GState-Move lädt die Sensor-Plattform weiter; der Status-Sensor existiert und seine ENUM-`options` decken alle 7 States ab.
+  - **Prüft:** Nach dem GState-Move lädt die Sensor-Plattform weiter; der Status-Sensor existiert und seine ENUM-`options` decken alle 8 States ab.
   - **Treiber:** Guard anlegen `eid,sub = N.create_guard({...minimal recover...})` → `N.wait(2)`; dann `N.st("sensor.<slug>_status")`.
-  - **Assert:** `st["state"] == "ok"`; `st["attributes"]["options"] == ["ok","suspect","recovering","verify","cooldown","escalated","snoozed"]`; `st["attributes"]["device_class"] == "enum"`.
+  - **Assert:** `st["state"] == "ok"`; `st["attributes"]["options"] == ["ok","suspect","blind","recovering","verify","cooldown","escalated","snoozed"]`; `st["attributes"]["device_class"] == "enum"`.
   - **Cleanup:** `N.delete_subentry(eid, sub)`
 
 - [ ] **GAP-M1c — Peer-Zugriff nur über peer.links (kein partner._following)** · `P1`
@@ -1279,5 +1330,5 @@ DELETED CLAIMS (alle 3 bestätigt obsolet/fehlplatziert — NICHT wiederhergeste
 - [ ] **GAP-SUITE — Aktuelle Suite-Zählungen stimmen (Doc-Drift gegen Code)** · `P2`
   - **Prüft:** Die vier In-Process-Suiten melden die aktuellen Counts (units=29, poe=16, engine=34, integration=12-Checks); zusätzlich die pytest-Suite `tests/components/necromancer/` (72) via `pytest tests/components/necromancer/`.
   - **Treiber:** je `python tests/test_units.py`, `…/test_poe.py`, `…/test_engine.py`, `…/test_integration.py` (aus `<ha-core>`, PYTHONPATH gesetzt); `<ha-venv>/bin/python -m pytest tests/components/necromancer/`.
-  - **Assert:** Schlusszeilen `29 passed`, `16 passed`, `34 passed`, `12/12 checks passed`, `72 passed` (jeweils 0 failed).
+  - **Assert:** Schlusszeilen `33 passed`, `20 passed`, `47 passed`, `12/12 checks passed`, `81 passed` (jeweils 0 failed).
   - **Cleanup:** —

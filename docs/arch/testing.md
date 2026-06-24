@@ -15,10 +15,14 @@ one of them:
 
 1. **No false alarm.** Ambiguous health (missing entity, render error, empty,
    `unknown`/`unavailable`) → `UNKNOWN`, never `UNHEALTHY`. No recovery is
-   triggered on `UNKNOWN`.
+   triggered on `UNKNOWN`; an idle guard shows `BLIND` instead of a stale `OK`,
+   and returns to `OK`/`SUSPECT` once health reads again (mid-recovery it holds,
+   never going `BLIND`).
 2. **No false success.** A recovery only counts as success if the action ran
-   without raising *and* (with the Health Check on) health verified OK. A raising
-   `recover()` is a failed attempt → retry/escalate.
+   without raising *and* the attempt verdict is good — with the Health Check on
+   the device VERIFY decides, with it off the **driver's own bool verdict** does
+   (a raising `recover()`, a `recover_failed` action, or a port that never came
+   online is a failed attempt → retry/escalate, never an assumed success).
 3. **Verify is possible.** Every `HealthSource.evaluate()` is callable on demand,
    so the VERIFY step works (this is why health is a *template*, never a momentary
    trigger).
@@ -39,15 +43,21 @@ one of them:
 9. **Operator snooze suspends cleanly.** A snoozed guard ignores health entirely
    (no transitions, no alerts), survives a restart (re-arming the *remaining* time),
    auto-resumes on elapse, and is refused (`ServiceValidationError`) mid-recovery —
-   distinct from auto-off, which still detects and escalates.
+   distinct from auto-off, which still detects and escalates. A manual recover press
+   lifts an active snooze; a press while *following* a linked repair is ignored.
+10. **Config-health is visible, not silent.** A mis-wired guard/port (blind guard,
+    blind template, invalid action, port without an id, port entity missing) raises
+    a Repair in Settings → Repairs; the issue clears the moment the cause is fixed or
+    the guard/port is removed. Reconciliation is event-driven (startup/reload + a
+    state-change listener), never polled.
 
 ---
 
 ## 2. Level 1 — unit (pure logic / real `hass`)
 
 Fast, deterministic. Three runnable in-process modules cover this level today (run
-them with the dev venv, see §5): **`tests/test_units.py`** (31), **`tests/test_poe.py`**
-(17), **`tests/test_engine.py`** (34). On top sits a **pytest suite on HA's native test
+them with the dev venv, see §5): **`tests/test_units.py`** (33), **`tests/test_poe.py`**
+(20), **`tests/test_engine.py`** (47). On top sits a **pytest suite on HA's native test
 harness** (`tests/suite/`, run via `pytest tests/components/necromancer/`) that automates
 Level 2 in-process — see §3. Each row maps to an invariant:
 
@@ -74,13 +84,18 @@ exploratory and true end-to-end live checks. Drive the real flows and the engine
   guard; sections flatten; `poe_port` injects the flat port list.
 - **State machine** *(automated: `tests/test_engine.py`, real hass + time-travel)*:
   happy path (recover→verify→cooldown→ok, `recover_count++`); debounce blip
-  absorbed; max-attempts → `ESCALATED`; raising driver = failed attempt; auto-off →
-  `ESCALATED`; manual recover (and ignored while a cycle is already running); cooldown→suspect.
+  absorbed; max-attempts → `ESCALATED`; raising driver = failed attempt; with Health
+  Check off the driver's `False` verdict is also a failed attempt (retry/escalate),
+  `True` succeeds at once; auto-off → `ESCALATED`; idle `UNKNOWN` → `BLIND` (back to
+  `OK`/`SUSPECT` on the next read, holds mid-recovery); manual recover (ignored while
+  a cycle is running or while following a linked repair; lifts an active snooze);
+  cooldown→suspect.
 - **Persistence across restart** *(automated: `tests/test_engine.py`)*: ESCALATED
-  stays (still unhealthy) / auto-clears (healthy again); `recover_count` and `auto`
-  survive; snapshot round-trip.
+  stays (still unhealthy) / auto-clears (healthy again); `recover_count`, `fail_count`,
+  `last_fail`, `last_recover_driver_result`/`_time` and `auto` survive; snapshot
+  round-trip.
 - **Health robustness**: rename-following; disable/enable live; remove; startup
-  already-unhealthy detection.
+  already-unhealthy detection; idle `UNKNOWN` → `BLIND` and recovery from it.
 - **Corner cases**: broken template rejected at submit; missing service in an
   action → escalate (not false success); bad notify action → logged, no crash.
 - **Port import/export (options flow)**: the menu exposes import + export; import
@@ -107,11 +122,15 @@ exploratory and true end-to-end live checks. Drive the real flows and the engine
     follower escalates (`linked_repair_failed`), it does **not** self-recover and
     re-trigger the group (no cascade).
 - **`repair_poe_port` service**: a call resolves the id and cycles the port
-  (status `recovering`→`good`); a second concurrent call **joins the in-flight cycle**
-  instead of double-cycling. Verified live end-to-end via a real PoE-bridge outage
-  (pull power → linked ping+lamps guards → one cycles the port → both verify OK).
+  (status `recovering`→`good`, or `failed` if the port never comes online or the actuator
+  service raises — never stranded on `recovering`); a second concurrent call **joins the
+  in-flight cycle** instead of double-cycling. Verified live end-to-end via a real
+  PoE-bridge outage (pull power → linked ping+lamps guards → one cycles the port → both
+  verify OK).
 - **View entities** *(`tests/suite/test_{sensor,binary_sensor,switch,button,event}.py`)*:
-  status (enum + lean attributes), health (connectivity; `UNKNOWN` → `unavailable`),
+  status (enum incl. `blind`; lean attributes — `recover_driver` (renamed from `target`),
+  `fail_count`, `last_fail`, `last_recover_driver_result`/`_time`), health
+  (connectivity; `UNKNOWN` → `unavailable`),
   auto-recovery switch (`entity_category: config`, writes through to `auto`), revive
   button (manual cycle, bypasses debounce), and the recovery `event` (fires
   `recovered` / `escalated` / `blocked`; absent on notify-only guards).
@@ -124,6 +143,11 @@ exploratory and true end-to-end live checks. Drive the real flows and the engine
   raises) and `wait_for_health` (waits up to a timeout / the boot window for OK,
   `check_first` short-circuits when already healthy, reports `timed_out` + `waited_s`,
   uses its own waiter not the verify event) — both keyed by the guard's status entity.
+- **Repairs (config-health)**: each problem type (blind guard, blind template, invalid
+  action, port no-id, port entity missing) raises an issue in the registry with the right
+  severity; assert the issue *appears* when the cause is introduced and *clears* when the
+  entity reappears or the guard/port is removed — reconciled on the state-change listener
+  (event-driven), not on a poll.
 
 These run today against the dev container by driving the REST/WS flow API and
 asserting on `sensor.*_status` + the error log (see the regression checklist for

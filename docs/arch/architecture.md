@@ -121,6 +121,14 @@ subscribed entity's `async_write_ha_state`; HA then reads the entity's propertie
                                                                      └────────────────────┘
 ```
 
+**Blind (health unknown while idle).** When health reads `UNKNOWN` — the source is
+unavailable or a template render error — while the guard is *idly* monitoring
+(`OK`/`SUSPECT`), it shows a distinct `blind` status instead of holding a stale `OK`.
+Unknown is **never a fault**, so blind triggers **no** recovery; it returns to
+`OK`/`SUSPECT` the moment health reads again. Mid-recovery
+(`RECOVERING`/`VERIFY`/`COOLDOWN`/`ESCALATED`/`SNOOZED`) it does *not* go blind — a
+device reading unknown mid-reboot is expected, so those states hold.
+
 **Operator services (off the automatic flow).** Three services act on a guard out-of-band:
 `reset` clears `ESCALATED → OK` and re-derives from live health (a manual "try again", no
 needless repair if already healthy); `snooze`/`unsnooze` move it to/from the `SNOOZED` state —
@@ -128,7 +136,10 @@ health is ignored, no transitions, no alerts (planned maintenance). `snooze` tak
 `duration`, **auto-resumes** when it elapses (the remaining time survives a restart), and is
 refused (`ServiceValidationError`) while a recovery cycle is in flight; a snoozed guard also
 never follows a linked-group repair. Recovering *now* stays the `button.<guard>_revive`,
-arming the `switch.<guard>_auto_recovery`. `reset`/`snooze`/`unsnooze`/`notify_guard` are **entity** services
+arming the `switch.<guard>_auto_recovery`. A manual recover press **lifts an active snooze**
+(an explicit "fix it now" overrides the suspension) but is **ignored while the guard is
+busy or following a linked partner's repair** — interrupting would reset `attempt`
+mid-flight or start a competing double-cycle. `reset`/`snooze`/`unsnooze`/`notify_guard` are **entity** services
 on the sensor platform (per guard / device / area); `snooze_all` + `unsnooze_all` are
 **domain** services (no target, every guard — "maintenance mode"; busy guards skipped
 best-effort) registered in `__init__` alongside `repair_poe_port`.
@@ -142,16 +153,20 @@ Key timing fields (the **behaviour** block):
 | `cooldown` | Pause after a recovery cycle before re-arming. |
 | `max_attempts` | Retries within one cycle before escalating. |
 
-**Health Check vs fire-and-forget.** `behavior.health_check` (a per-recovery toggle
-in the wizard, default on) decides:
+**Health Check vs the driver's own verdict.** `recover()` returns a bool verdict
+(`True` = ran cleanly, `False` = ran but reported failure); `behavior.health_check`
+(a per-recovery toggle in the wizard, default on) decides who gets the final say:
 
 - **On**: after `recover()`, the engine waits (event-driven, up to `boot_window`)
   for the HealthSource to read `OK`. Not OK within the window → retry up to
-  `max_attempts` → `ESCALATED`.
-- **Off**: `recover()` is assumed to have worked → straight to success; the
-  continuous health monitoring re-triggers later if it didn’t. *(If `recover()`
-  raises — e.g. a missing service — it counts as a failed attempt, never a
-  success.)*
+  `max_attempts` → `ESCALATED`. The driver's own verdict is only *recorded*
+  (`last_recover_driver_result`), not the decider.
+- **Off**: the **driver's verdict decides** the attempt — `True` → success; `False`
+  (the action set `recover_failed`, or a PoE port that didn't come back online) is a
+  **failed attempt** (retry up to `max_attempts` → `ESCALATED`), *not* a blind
+  assumed success. The continuous health monitoring still re-triggers later if a
+  clean-looking recovery didn't actually hold. *(If `recover()` raises — e.g. a
+  missing service — it likewise counts as a failed attempt, never a success.)*
 
 **Reload the assigned device's integration (optional).** If a device is assigned
 and the guard has `behavior.reload_entry`, then after `recover()` (and before
@@ -202,16 +217,19 @@ The wizard’s first step picks the source type (`state_based` / `template_based
 
 ## 5. Recovery drivers (`core/drivers/`)
 
-`recover()` performs the repair; `can_recover()` is a pre-flight guard that blocks
-(→ `recovery_blocked`, no blind action) when something is missing.
+`recover()` performs the repair and returns a **bool verdict** (`True` = ran cleanly,
+`False` = ran but reported failure; raising = hard failure) — used to decide the
+attempt when the Health Check is off, and recorded for diagnostics when it's on (§3).
+`can_recover()` is a pre-flight guard that blocks (→ `recovery_blocked`, no blind
+action) when something is missing.
 
-| Driver | Action | Pre-flight (`can_recover`) |
-|---|---|---|
-| `switch_cycle` | `turn_off` → `off_on_delay` → `turn_on`. | switch entity exists. |
-| `action_call` | Run one user-defined action sequence (script syntax). | action valid & non-empty. |
-| `action_cycle` | Run an *off* action → delay → *on* action. | both actions valid. |
-| `poe_port` | Resolve the device to a PoE port by `expected_id`, then cycle its actuator with staged status verify. Learns the port while healthy and falls back to the last-known port when the device has aged out. | one live **or** last-known port. |
-| `noop` | Nothing (used by notify-only guards). | — |
+| Driver | Action | Verdict (`recover()`) | Pre-flight (`can_recover`) |
+|---|---|---|---|
+| `switch_cycle` | `turn_off` → `off_on_delay` → `turn_on`. | `True` unless it raises. | switch entity exists. |
+| `action_call` | Run one user-defined action sequence (script syntax). | `False` if the action set `recover_failed`, else `True`. | action valid & non-empty. |
+| `action_cycle` | Run an *off* action → delay → *on* action. | `False` if the on action set `recover_failed`, else `True`. | both actions valid. |
+| `poe_port` | Resolve the device to a PoE port by `expected_id`, then cycle its actuator with staged status verify. Learns the port while healthy and falls back to the last-known port when the device has aged out. | the fabric's "did the port come back online?" result. | one live **or** last-known port. |
+| `noop` | Nothing (used by notify-only guards). | `True` (never reached). | — |
 
 User actions are validated (`cv.SCRIPT_SCHEMA` + `async_validate_actions_config`)
 and run via the `Script` helper (`core/actions.py`), blocking for recovery, detached
@@ -222,7 +240,8 @@ for notifications.
 `necromancer.notify_guard` target) — which the action-running drivers (`action_call`,
 `action_cycle`) seed into the script run as template variables (`switch_cycle` / `poe_port` /
 `noop` ignore it). `async_run` returns the run's **final variable scope** (minus HA's injected
-`context`), and `action_cycle` feeds the off action's scope into the on action — so off-phase
+`context`); the action signals a failed attempt by setting `recover_failed` true in that scope
+(the driver's verdict, §3), and `action_cycle` feeds the off action's scope into the on action — so off-phase
 `variables:` and the engine context are both readable in the on phase, with no helper entity to
 carry state across the power-cycle. Variables are per-attempt (each retry runs off→on fresh);
 nothing leaks between attempts. Within a run the scope is one flat namespace (HA
@@ -249,7 +268,10 @@ poe_port  → poe_port      (own staged verify; + device Health Check when enabl
 
 A strategy maps to a `driver type`; `behavior.health_check` (the toggle) decides
 whether the engine's VERIFY step runs. Auto-PoE keeps its own staged verify (port
-goes offline → comes online) on top of the device Health Check (when enabled).
+goes offline → comes online) on top of the device Health Check (when enabled); with
+the Health Check **off**, that staged "did the port come back?" result is the
+driver's verdict and decides the attempt (a port that didn't return = a failed
+attempt), instead of being discarded.
 
 **Auto-PoE remembers its port.** A device that is down can age out of the
 switch's FDB/LLDP neighbour table, so resolving it live would find *nothing*
@@ -274,7 +296,9 @@ a config entry (the lamps only return after the reload), a sequence a driver can
 express. The **PoE fabric** (`core/poe.py`) is that shared, port-level primitive: a
 domain-singleton holding the live + last-known `id → port` map (same resolution as
 `poe_port`, watching every port's id-entity), a per-port **status**
-(`good` / `recovering` / `failed`) and a per-port **in-flight cycle**. It backs the
+(`good` / `recovering` / `failed`) and a per-port **in-flight cycle**. A cycle that
+*raises* (e.g. the actuator service is gone) leaves the port on `failed`, never
+stranded on `recovering`. It backs the
 **`necromancer.repair_poe_port(id)`** service — blocking, and **coalesced** per port:
 concurrent callers (multiple guards, automations) join the one in-flight cycle and
 share its result instead of each cycling the port. Each status change is fired as a
@@ -400,6 +424,16 @@ is no separate "mode" field — the notify-vs-recover choice *is* the strategy c
   once HA is started *and* the guards' own view-entities are registered — the
   self-reference check sees them even for a guard added at runtime (not just after
   the next restart).
+- **Repairs (Settings → Repairs).** The same user-fixable config problems are also
+  surfaced as **Repair issues** so they're visible, not just in the log:
+  `engine.config_problems()` reports a guard whose health entity is missing/disabled
+  (blind), a health template that reads only missing/disabled entities, or an invalid
+  recovery action; `fabric.port_problems()` reports a port with no id source or a
+  missing actuator/status entity. `_reconcile_issues` (in `__init__`) creates/deletes
+  issues to match — idempotent, so it self-clears: fixing the config saves and reloads
+  the entry, dropping the stale issue. It re-runs at startup, on reload, and
+  **event-driven** when a watched entity appears/disappears (`_on_watched_change`), and
+  `async_remove_entry` drops our issues on integration removal.
 - **Auto-recovery is not a setup field.** It is the per-guard runtime switch
   entity (Store-persisted); guards start with it on.
 - **Options flow (ports).** A button menu (`async_show_menu`) over the flat port
@@ -432,8 +466,11 @@ event. Linking to an existing device uses the Battery-Notes pattern (`device_inf
 `entity.device_entry`) so Necromancer never claims ownership of a foreign device.
 
 The status sensor's attributes are intentionally lean — `attempt`, `recover_count`,
-`last_recover`, `target`, `snooze_until`; auto-recovery is the switch (not duplicated as
-an attribute) and "last seen healthy" is left to state history.
+`last_recover`, `fail_count`, `last_fail`, `recover_driver` (the resolved target),
+`last_recover_driver_result` (the recovery driver's own `good`/`failed` verdict for the
+last attempt, distinct from the overall guard state) and `last_recover_driver_time`,
+plus `snooze_until`; auto-recovery is the switch (not duplicated as an attribute) and
+"last seen healthy" is left to state history.
 
 **Per-guard services** are registered on the sensor platform via
 `async_register_entity_service` (targeted at `sensor.*_status`; device/area targets
