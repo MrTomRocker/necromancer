@@ -3,7 +3,8 @@
 A power-cycle expressed as two user-defined action sequences (e.g. cut power via
 one service, restore via another) with a delay in between. Whether the result is
 verified against the device's health entity is the engine's job (health-check
-flag).
+flag). The on action is *attempted* after the off — if it can't run (the host or
+network is gone mid-cycle), the device may stay off and the guard escalates.
 """
 
 from __future__ import annotations

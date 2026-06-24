@@ -256,6 +256,11 @@ Pick the shape that fits the device:
 | **Off/on actions** | an *off* action → wait → an *on* action |
 | **Auto-PoE** | resolve the device to its PoE port and power-cycle it, with a staged verify (the port goes offline → comes back) on top of the device Health Check (when its toggle is on). It **remembers** the port while the device is healthy, so it can still recover a device that has already dropped off the switch and aged out of the neighbour table |
 
+> ⚠️ **A power-cycle can leave a device off.** If the *off* succeeds but the *on* can't run — the host
+> or network is gone mid-cycle, e.g. you cut power to the very switch your network or Home Assistant
+> runs on — the device stays off and the guard **escalates** (so you're alerted). Don't guard a
+> device with a recovery that cuts its own lifeline.
+
 Every recovery has a **Health Check** toggle (on by default). With it on, Necromancer waits until the
 device reports healthy again before declaring success — the boot window and retries below apply. Turn
 it off for **fire-and-forget**: the action runs once and success is assumed (continuous monitoring

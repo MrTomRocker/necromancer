@@ -2,7 +2,9 @@
 
 Whether recovery is then verified against the device's health entity is the
 engine's job (the VERIFY step, controlled by the strategy's health-check flag);
-this driver just does the power-cycle. The switch is always turned back on.
+this driver just does the power-cycle. It *attempts* to turn the switch back on —
+if the on can't run (the host or network is gone mid-cycle), the device may stay
+off and the guard escalates. A persistently failing on is a failed attempt.
 """
 
 from __future__ import annotations
