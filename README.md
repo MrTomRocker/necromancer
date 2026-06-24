@@ -333,6 +333,14 @@ recover guards get all five, notify-only guards just the status sensor + health:
   <img width="320px" alt="Necromancer guard entities" src="https://raw.githubusercontent.com/MrTomRocker/homeassistant-necromancer/main/img/guard_entities.png">
 </div>
 
+**Misconfigured? Check Repairs.** A guard or PoE port that can't do its job because of a *config*
+problem is surfaced in **Settings → Repairs** with the specific guard/port and how to fix it: a
+health entity that's missing or disabled (a *blind* guard), a health template that reads only gone
+entities, a recovery that references a missing service, or a PoE port with no device id or a missing
+actuator. Each clears itself once you correct the config (saving reloads the guard). Repairs flag
+config you can fix — a device that's simply *unreachable* isn't flagged here; the guard escalates
+for that.
+
 ### The status sensor — states & attributes
 
 `sensor.<guard>_status` is an enum sensor; its state is where the guard sits in the
