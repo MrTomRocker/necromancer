@@ -25,6 +25,7 @@ from custom_components.necromancer.core.drivers.base import RecoveryDriver
 from custom_components.necromancer.core.engine import DeviceEngine, GState
 from custom_components.necromancer.core.health.base import Health, HealthSource
 from custom_components.necromancer.core.health.entity_state import EntityStateHealth
+from custom_components.necromancer.core.health.template import TemplateHealth
 from custom_components.necromancer.core.poe import PoeFabric
 from custom_components.necromancer.core.policies.notify import NotifyPolicy
 from custom_components.necromancer.core.policies.standard import StandardPolicy
@@ -968,6 +969,27 @@ async def test_unknown_during_recovery_holds(hass, _):
     eng._evaluate()
     assert eng.state is GState.RECOVERING
     await eng.async_stop()
+
+
+async def test_template_missing_entity_warns_not_blind(hass, _):
+    # A template that DEFAULTS a missing entity renders a concrete verdict, so the
+    # guard isn't blind — warn about the missing entity, don't claim "blind".
+    health = TemplateHealth(
+        hass, {"template": "{{ states('sensor.gone')|float(0) > 150 }}"}
+    )
+    eng = make(hass, health, StubDriver(hass))
+    keys = {p["key"] for p in eng.config_problems()}
+    assert "health_template_missing_entity" in keys
+    assert "health_template_blind" not in keys
+
+
+async def test_template_truly_blind(hass, _):
+    # A template that yields unknown (no usable value) is genuinely blind.
+    health = TemplateHealth(hass, {"template": "{{ states('sensor.gone') }}"})
+    eng = make(hass, health, StubDriver(hass))
+    keys = {p["key"] for p in eng.config_problems()}
+    assert "health_template_blind" in keys
+    assert "health_template_missing_entity" not in keys
 
 
 async def test_reconcile_creates_and_clears_config_issue(hass, _):

@@ -651,6 +651,10 @@
       "title": "{name}: health template reads only missing entities",
       "description": "Every entity the health template of \"{name}\" reads is missing or disabled, so the guard is blind. Reconfigure the guard's Health Template to reference entities that exist."
     },
+    "health_template_missing_entity": {
+      "title": "{name}: health template references a missing entity",
+      "description": "The health template of \"{name}\" references `{entity}`, which doesn't exist — the template defaults it, so the guard reads a value that may not reflect the device and can recover or escalate on missing data. Add the entity, or handle a missing value in the template (for example with `has_value()`)."
+    },
     "recovery_action_invalid": {
       "title": "{name}: recovery can't run",
       "description": "The recovery of \"{name}\" can't run: {error}. Reconfigure the guard's recovery — a valid service/action, or (for Auto-PoE) at least one configured port."

@@ -651,6 +651,10 @@
       "title": "{name}: Health Template liest nur fehlende Entities",
       "description": "Alle Entities, die das Health Template von „{name}\" liest, fehlen oder sind deaktiviert — der Guard ist blind. Konfiguriere das Health Template des Guards auf existierende Entities um."
     },
+    "health_template_missing_entity": {
+      "title": "{name}: Health Template referenziert eine fehlende Entity",
+      "description": "Das Health Template von „{name}\" referenziert `{entity}`, die nicht existiert — das Template defaultet sie, der Guard liest also einen Wert, der das Gerät evtl. nicht widerspiegelt, und kann auf fehlenden Daten recovern/eskalieren. Lege die Entity an, oder behandle den Fehlwert im Template (z.B. mit `has_value()`)."
+    },
     "recovery_action_invalid": {
       "title": "{name}: Reparatur kann nicht laufen",
       "description": "Die Reparatur von „{name}\" kann nicht laufen: {error}. Korrigiere die Reparatur des Guards — ein gültiger Service / eine gültige Aktion, oder (bei Auto-PoE) mindestens ein konfigurierter Port."

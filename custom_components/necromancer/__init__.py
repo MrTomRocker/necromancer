@@ -170,6 +170,7 @@ _ISSUE_SEVERITY = {
     "health_entity_missing": ir.IssueSeverity.ERROR,
     "health_entity_disabled": ir.IssueSeverity.ERROR,
     "health_template_blind": ir.IssueSeverity.ERROR,
+    "health_template_missing_entity": ir.IssueSeverity.WARNING,
     "recovery_action_invalid": ir.IssueSeverity.ERROR,
     "port_no_id": ir.IssueSeverity.WARNING,
     "port_entity_missing": ir.IssueSeverity.ERROR,

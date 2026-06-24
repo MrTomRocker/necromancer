@@ -296,12 +296,24 @@ class DeviceEngine:
                 problems.append(self._problem("health_entity_missing", entity=eid))
             elif _disabled(eid):
                 problems.append(self._problem("health_entity_disabled", entity=eid))
-        # A template subscribes to nothing directly; it is blind only if EVERY
-        # entity its verdict reads is gone (one missing of many is just a warning).
+        # A template subscribes to nothing directly. If its verdict is UNKNOWN the
+        # guard is truly blind; if it still yields a verdict (a default masks a
+        # missing entity) but reads one that's gone, warn — the guard may act on a
+        # value that doesn't reflect the device.
         if not self.health.watched_entities:
-            referenced = self.health.referenced_entities()
-            if referenced and all(_missing(e) or _disabled(e) for e in referenced):
+            missing = [
+                eid
+                for eid in self.health.referenced_entities()
+                if _missing(eid) or _disabled(eid)
+            ]
+            if self.health.evaluate() == Health.UNKNOWN:
                 problems.append(self._problem("health_template_blind"))
+            elif missing:
+                problems.append(
+                    self._problem(
+                        "health_template_missing_entity", entity=", ".join(missing)
+                    )
+                )
         if errors := self.driver.config_errors():
             problems.append(self._problem("recovery_action_invalid", error=errors[0]))
         return problems
