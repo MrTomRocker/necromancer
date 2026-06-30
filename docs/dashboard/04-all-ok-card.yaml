@@ -1,0 +1,42 @@
+# necromancer dashboard - Green 'all OK' card
+#
+# mushroom-template-card. 'All N guards OK' or 'N of M in maintenance'.
+# Hidden via card_mod (display:none) as soon as there is an active incident.
+
+type: custom:mushroom-template-card
+primary: |-
+  {%- set snoozed = integration_entities('necromancer') | select('match', 'sensor') | select('is_state', 'snoozed') | list | count -%}
+  {%- set total = integration_entities('necromancer') | select('match', 'sensor') | list | count -%}
+  {{ 'Alle ' ~ total ~ ' Wächter OK'
+     if snoozed == 0
+     else (snoozed ~ ' von ' ~ total ~ ' im Wartungsmodus') }}
+secondary: |-
+  {%- set snoozed = integration_entities('necromancer') | select('match', 'sensor') | select('is_state', 'snoozed') | list | count -%}
+  {{ 'Keine aktiven Incidents - alles ruhig.'
+     if snoozed == 0
+     else 'Keine Incidents · die übrigen sind OK.' }}
+icon: |-
+  {%- set snoozed = integration_entities('necromancer') | select('match', 'sensor') | select('is_state', 'snoozed') | list | count -%}
+  {{ 'mdi:shield-check' if snoozed == 0 else 'mdi:sleep' }}
+icon_color: |-
+  {%- set snoozed = integration_entities('necromancer') | select('match', 'sensor') | select('is_state', 'snoozed') | list | count -%}
+  {{ 'green' if snoozed == 0 else 'purple' }}
+layout: horizontal
+fill_container: true
+tap_action:
+  action: navigate
+  navigation_path: '#necro-guards'
+card_mod:
+  style: |-
+    {%- set incidents = integration_entities('necromancer') | select('match', 'sensor') | map('states') | select('in', ['suspect', 'recovering', 'verify', 'escalated']) | list | count -%}
+    {%- set snoozed = integration_entities('necromancer') | select('match', 'sensor') | select('is_state', 'snoozed') | list | count -%}
+    {%- set c = '156,39,176' if snoozed > 0 else '76,175,80' -%}
+    ha-card {
+      background: rgba({{ c }},0.10);
+      border: 1px solid rgba({{ c }},0.45);
+      border-radius: 18px;
+      {% if incidents > 0 %}display: none !important;{% endif %}
+    }
+grid_options:
+  columns: 12
+  rows: 1

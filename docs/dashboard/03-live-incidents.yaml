@@ -1,0 +1,192 @@
+# necromancer dashboard - Live incidents
+#
+# auto-entities -> grid -> config-template-card -> mushroom-template-card.
+# One card per guard in an active state (escalated/recovering/suspect/verify),
+# filtered on the guard_name attribute. Badge = health (lan-connect / -disconnect / -pending).
+# Secondary = '<state> . attempt N . <recover_driver, shortened>'. Tap -> device page.
+# Renders nothing when there are no incidents (show_empty: false).
+
+type: custom:auto-entities
+show_empty: false
+card:
+  type: grid
+  columns: 1
+  square: false
+card_param: cards
+filter:
+  include:
+  - integration: necromancer
+    state: escalated
+    attributes:
+      guard_name: '*'
+    options:
+      type: custom:config-template-card
+      entities:
+      - this.entity_id
+      card:
+        type: custom:mushroom-template-card
+        entity: this.entity_id
+        primary: '{{ state_attr(config.entity, ''guard_name'') }}'
+        secondary: |-
+          {%- set attempt = state_attr(config.entity, 'attempt') | default('?') -%}
+          {%- set rd = (state_attr(config.entity, 'recover_driver') or '—').split('→')[0].strip() -%}
+          {%- set rd = rd.split('.', 1)[1] if (' ' not in rd and '.' in rd) else rd -%}
+          Eskaliert · Versuch {{ attempt }} · {{ rd }}
+        icon: mdi:alert-octagon
+        icon_color: red
+        badge_icon: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'mdi:lan-disconnect' if is_state(h, 'off')
+             else ('mdi:lan-pending' if states(h) in ['unavailable', 'unknown']
+             else 'mdi:lan-connect') }}
+        badge_color: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'red' if is_state(h, 'off')
+             else ('grey' if states(h) in ['unavailable', 'unknown']
+             else 'green') }}
+        tap_action:
+          action: navigate
+          navigation_path: ${ '/config/devices/device/' + this.hass.entities['this.entity_id'].device_id }
+        card_mod:
+          style:
+            .: |-
+              ha-card {
+                border: 1px solid rgba(244,67,54,0.6);
+                animation: mc-row-pulse 1.6s ease-in-out infinite;
+              }
+              @keyframes mc-row-pulse {
+                0%, 100% { box-shadow: 0 0 0 0 rgba(244,67,54,0.4); }
+                50%      { box-shadow: 0 0 14px 2px rgba(244,67,54,0.4); }
+              }
+            mushroom-state-info$: |-
+              .primary {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                display: block !important;
+              }
+  - integration: necromancer
+    state: recovering
+    attributes:
+      guard_name: '*'
+    options:
+      type: custom:config-template-card
+      entities:
+      - this.entity_id
+      card:
+        type: custom:mushroom-template-card
+        entity: this.entity_id
+        primary: '{{ state_attr(config.entity, ''guard_name'') }}'
+        secondary: |-
+          {%- set attempt = state_attr(config.entity, 'attempt') | default('?') -%}
+          {%- set rd = (state_attr(config.entity, 'recover_driver') or '—').split('→')[0].strip() -%}
+          {%- set rd = rd.split('.', 1)[1] if (' ' not in rd and '.' in rd) else rd -%}
+          Reparatur · Versuch {{ attempt }} · {{ rd }}
+        icon: mdi:loading
+        icon_color: blue
+        badge_icon: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'mdi:lan-disconnect' if is_state(h, 'off')
+             else ('mdi:lan-pending' if states(h) in ['unavailable', 'unknown']
+             else 'mdi:lan-connect') }}
+        badge_color: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'red' if is_state(h, 'off')
+             else ('grey' if states(h) in ['unavailable', 'unknown']
+             else 'green') }}
+        tap_action:
+          action: navigate
+          navigation_path: ${ '/config/devices/device/' + this.hass.entities['this.entity_id'].device_id }
+        card_mod:
+          style:
+            mushroom-state-info$: |-
+              .primary {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                display: block !important;
+              }
+  - integration: necromancer
+    state: suspect
+    attributes:
+      guard_name: '*'
+    options:
+      type: custom:config-template-card
+      entities:
+      - this.entity_id
+      card:
+        type: custom:mushroom-template-card
+        entity: this.entity_id
+        primary: '{{ state_attr(config.entity, ''guard_name'') }}'
+        secondary: |-
+          {%- set attempt = state_attr(config.entity, 'attempt') | default('?') -%}
+          {%- set rd = (state_attr(config.entity, 'recover_driver') or '—').split('→')[0].strip() -%}
+          {%- set rd = rd.split('.', 1)[1] if (' ' not in rd and '.' in rd) else rd -%}
+          Verdacht · Versuch {{ attempt }} · {{ rd }}
+        icon: mdi:alert-circle-outline
+        icon_color: orange
+        badge_icon: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'mdi:lan-disconnect' if is_state(h, 'off')
+             else ('mdi:lan-pending' if states(h) in ['unavailable', 'unknown']
+             else 'mdi:lan-connect') }}
+        badge_color: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'red' if is_state(h, 'off')
+             else ('grey' if states(h) in ['unavailable', 'unknown']
+             else 'green') }}
+        tap_action:
+          action: navigate
+          navigation_path: ${ '/config/devices/device/' + this.hass.entities['this.entity_id'].device_id }
+        card_mod:
+          style:
+            mushroom-state-info$: |-
+              .primary {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                display: block !important;
+              }
+  - integration: necromancer
+    state: verify
+    attributes:
+      guard_name: '*'
+    options:
+      type: custom:config-template-card
+      entities:
+      - this.entity_id
+      card:
+        type: custom:mushroom-template-card
+        entity: this.entity_id
+        primary: '{{ state_attr(config.entity, ''guard_name'') }}'
+        secondary: |-
+          {%- set attempt = state_attr(config.entity, 'attempt') | default('?') -%}
+          {%- set rd = (state_attr(config.entity, 'recover_driver') or '—').split('→')[0].strip() -%}
+          {%- set rd = rd.split('.', 1)[1] if (' ' not in rd and '.' in rd) else rd -%}
+          Verify · Versuch {{ attempt }} · {{ rd }}
+        icon: mdi:heart-pulse
+        icon_color: cyan
+        badge_icon: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'mdi:lan-disconnect' if is_state(h, 'off')
+             else ('mdi:lan-pending' if states(h) in ['unavailable', 'unknown']
+             else 'mdi:lan-connect') }}
+        badge_color: |-
+          {%- set h = state_attr(config.entity, 'health_entity') -%}
+          {{ 'red' if is_state(h, 'off')
+             else ('grey' if states(h) in ['unavailable', 'unknown']
+             else 'green') }}
+        tap_action:
+          action: navigate
+          navigation_path: ${ '/config/devices/device/' + this.hass.entities['this.entity_id'].device_id }
+        card_mod:
+          style:
+            mushroom-state-info$: |-
+              .primary {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                display: block !important;
+              }
+sort:
+  method: state

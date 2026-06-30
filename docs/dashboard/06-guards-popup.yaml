@@ -1,0 +1,134 @@
+# necromancer dashboard - 'All guards' pop-up
+#
+# bubble-card (card_type: pop-up, hash #necro-guards).
+# Inside: auto-entities -> custom:grid-layout (responsive: 2 columns, <600px = 1 via mediaquery)
+# -> one config-template-card per guard -> bubble-card button.
+# sub_button: {main, bottom, bottom_layout:'rows'} - main = Health/Auto top-right,
+# bottom = group(s), compact + right-aligned (fill_width:false + justify_content:end).
+# Responsive via window.matchMedia: <600px moves Snooze+driver into a 2nd group (row) below.
+# 'Revive now' (with a confirmation dialog) presses button.<base>_recover. rows: 3 (phone) / 2 (desktop).
+
+type: custom:bubble-card
+card_type: pop-up
+hash: '#necro-guards'
+name: Necromancer · Alle Wächter
+icon: mdi:shield-search
+width_desktop: 1400px
+cards:
+- type: custom:auto-entities
+  card:
+    type: custom:layout-card
+    layout_type: custom:grid-layout
+    layout:
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 600px), 1fr))
+      grid-gap: 8px
+  card_param: cards
+  sort:
+    method: friendly_name
+  filter:
+    include:
+    - integration: necromancer
+      attributes:
+        guard_name: '*'
+      options:
+        type: custom:config-template-card
+        entities:
+        - this.entity_id
+        card:
+          type: custom:bubble-card
+          card_type: button
+          button_type: name
+          show_state: true
+          entity: this.entity_id
+          name: ${ states['this.entity_id'].attributes.guard_name }
+          tap_action:
+            action: navigate
+            navigation_path: ${ '/config/devices/device/' + this.hass.entities['this.entity_id'].device_id }
+          button_action:
+            tap_action:
+              action: navigate
+              navigation_path: ${ '/config/devices/device/' + this.hass.entities['this.entity_id'].device_id }
+          sub_button: |-
+            ${ (() => {
+              const st = states['this.entity_id'];
+              const a = st.attributes;
+
+              /* main: status icons (top right) */
+              const main = [];
+              if (a.health_entity) {
+                main.push({ entity: a.health_entity, show_state: false, show_name: true, name: 'Health' });
+              }
+              if (a.auto_recovery_entity) {
+                main.push({ entity: a.auto_recovery_entity, show_state: false, show_name: true, name: 'Auto-repair', tap_action: { action: 'toggle' } });
+              }
+
+              /* primary row: Revive now + counts */
+              const primary = [];
+              if (a.revive_entity) {
+                primary.push({
+                  icon: 'mdi:flash',
+                  name: 'Revive now',
+                  show_name: true,
+                  show_state: false,
+                  fill_width: false,
+                  tap_action: {
+                    action: 'perform-action',
+                    perform_action: 'button.press',
+                    target: { entity_id: a.revive_entity },
+                    confirmation: { text: 'Revive ' + (a.guard_name || 'this guard') + ' now?' }
+                  }
+                });
+              }
+              primary.push({ entity: 'this.entity_id', show_attribute: true, attribute: 'recover_count', icon: 'mdi:backup-restore', show_name: true, name: 'Repairs', fill_width: false });
+              primary.push({ entity: 'this.entity_id', show_attribute: true, attribute: 'fail_count', icon: 'mdi:alert-circle', show_name: true, name: 'Fails', fill_width: false });
+
+              /* secondary row (on small screens goes below): snooze + driver */
+              const secondary = [];
+              const snoozed = st.state === 'snoozed';
+              secondary.push({
+                icon: snoozed ? 'mdi:sleep-off' : 'mdi:sleep',
+                name: snoozed ? 'Deactivate snooze' : 'Activate snooze',
+                show_name: true,
+                show_state: false,
+                show_background: snoozed,
+                fill_width: false,
+                tap_action: {
+                  action: 'perform-action',
+                  perform_action: snoozed ? 'necromancer.unsnooze' : 'necromancer.snooze',
+                  target: { entity_id: 'this.entity_id' },
+                  data: snoozed ? {} : { duration: '01:00:00' }
+                }
+              });
+              let rd = (a.recover_driver || '').split('→')[0].trim();
+              if (rd && rd.indexOf(' ') === -1 && rd.indexOf('.') > 0) {
+                rd = rd.split('.').slice(1).join('.');
+              }
+              if (rd && rd !== '—') {
+                secondary.push({ entity: 'this.entity_id', name: rd, show_name: true, show_state: false, icon: 'mdi:wrench', fill_width: false });
+              }
+
+              /* responsive: small screen -> two groups (stacked as rows via bottom_layout); large -> one group */
+              const small = window.matchMedia('(max-width: 600px)').matches;
+              const bottom = small
+                ? [
+                    { buttons_layout: 'inline', justify_content: 'end', group: primary },
+                    { buttons_layout: 'inline', justify_content: 'end', group: secondary }
+                  ]
+                : [
+                    { buttons_layout: 'inline', justify_content: 'end', group: primary.concat(secondary) }
+                  ];
+
+              return { main: main, bottom: bottom, bottom_layout: 'rows' };
+            })() }
+          card_mod:
+            style: |-
+              {% set s = states(config.entity) %}{% set m = {'ok':'76,175,80','suspect':'255,152,0','blind':'120,144,156','recovering':'33,150,243','verify':'0,188,212','cooldown':'120,144,156','escalated':'244,67,54','snoozed':'156,39,176'} %}{% set c = m.get(s,'120,144,156') %}
+              .bubble-button-card-container {
+                background: linear-gradient(135deg, rgba({{c}},0.30) 0%, rgba({{c}},0.08) 100%) !important;
+                border: 1px solid rgba({{c}},0.55) !important;
+                border-radius: 18px !important;
+                {% if s == 'escalated' %}animation: mc-pulse 1.4s ease-in-out infinite;{% endif %}
+              }
+              @keyframes mc-pulse {0%,100%{box-shadow:0 0 0 0 rgba(244,67,54,.55);}50%{box-shadow:0 0 22px 4px rgba(244,67,54,.55);}}
+          scrolling_effect: false
+          rows: '${ window.matchMedia(''(max-width: 600px)'').matches ? 3 : 2 }'

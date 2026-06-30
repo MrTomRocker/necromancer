@@ -113,6 +113,7 @@ plug, a PoE camera or a cloud bridge — all guarded with the *same* model (heal
 ⚙️ **Operate & integrate**
 
 - 🎛️ **Full operator surface** — per-guard status & health entities (with recover & fail counts and the recovery driver's own last result), a revive button, an arm/disarm switch, and recovery `event`s for dashboards and automations.
+- 🖥️ **Ready-made dashboard** — a generic, copy-paste fleet overview (status banner, live-incident list, and a per-guard pop-up with one-tap revive/snooze) that auto-discovers every guard via `guard_name` and is fully responsive — see **[docs/dashboard](docs/dashboard/)**.
 - 🩹 **Self-diagnosing config** — a guard pointed at a missing or disabled health entity, a health template that reads only missing entities (or silently defaults one), a broken recovery action, or a PoE port with no id or a missing actuator surfaces in **Settings → Repairs** — event-driven and self-clearing.
 - 🤖 **Actions for your automations** — `necromancer.snooze` / `snooze_all` / `reset` / `repair_poe_port` / `notify_guard` / `check_health` / `wait_for_health`, callable from any automation or script (snooze everything before a mass reboot, cycle a PoE port on demand, or let a recovery script re-use a guard's Health Check).
 - 😴 **Maintenance mode** — `snooze` one guard or `snooze_all` before planned work; they go quiet and auto-resume.

@@ -1,0 +1,60 @@
+# necromancer dashboard - Status chips
+#
+# mushroom-chips-card. One chip per state with a live count
+# (OK / Suspect / Recovering / Verify / Escalated / Snoozed).
+# The Snooze chip calls necromancer.unsnooze_all.
+
+type: custom:mushroom-chips-card
+alignment: center
+chips:
+- type: template
+  icon: mdi:check-circle
+  icon_color: green
+  content: |-
+    {{ integration_entities('necromancer')
+       | select('match', 'sensor')
+       | select('is_state', 'ok')
+       | list | count }} OK
+- type: template
+  icon: mdi:alert-circle-outline
+  icon_color: orange
+  content: |-
+    {{ integration_entities('necromancer')
+       | select('match', 'sensor')
+       | select('is_state', 'suspect')
+       | list | count }} Verdacht
+- type: template
+  icon: mdi:loading
+  icon_color: blue
+  content: |-
+    {{ integration_entities('necromancer')
+       | select('match', 'sensor')
+       | select('is_state', 'recovering')
+       | list | count }} Reparatur
+- type: template
+  icon: mdi:heart-pulse
+  icon_color: cyan
+  content: |-
+    {{ integration_entities('necromancer')
+       | select('match', 'sensor')
+       | select('is_state', 'verify')
+       | list | count }} Verify
+- type: template
+  icon: mdi:alert-octagon
+  icon_color: red
+  content: |-
+    {{ integration_entities('necromancer')
+       | select('match', 'sensor')
+       | select('is_state', 'escalated')
+       | list | count }} Alarm
+- type: template
+  icon: mdi:sleep
+  icon_color: purple
+  content: |-
+    {{ integration_entities('necromancer')
+       | select('match', 'sensor')
+       | select('is_state', 'snoozed')
+       | list | count }} Snooze
+  tap_action:
+    action: perform-action
+    perform_action: necromancer.unsnooze_all

@@ -1,0 +1,24 @@
+# necromancer dashboard - Maintenance chips
+#
+# mushroom-chips-card. 'Maintenance mode' (necromancer.snooze_all, 1h) and
+# 'Wake all' (necromancer.unsnooze_all).
+
+type: custom:mushroom-chips-card
+alignment: center
+chips:
+- type: template
+  icon: mdi:sleep
+  icon_color: purple
+  content: Wartungsmodus
+  tap_action:
+    action: perform-action
+    perform_action: necromancer.snooze_all
+    data:
+      duration: 01:00:00
+- type: template
+  icon: mdi:sleep-off
+  icon_color: green
+  content: Alle wecken
+  tap_action:
+    action: perform-action
+    perform_action: necromancer.unsnooze_all

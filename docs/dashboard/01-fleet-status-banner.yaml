@@ -1,0 +1,157 @@
+# necromancer dashboard - Fleet status banner
+#
+# mushroom-template-card. Shows the WORST state across all guards.
+# Jinja iterates integration_entities('necromancer') | select('match','sensor'), ranks the states
+# (ok < cooldown < verify < suspect < recovering < escalated) and picks icon / colour / text.
+# Snooze count on the 2nd line; pulse animation on 'escalated' (card_mod).
+# Tap -> opens the pop-up (#necro-guards).
+
+type: custom:mushroom-template-card
+primary: |-
+  {%- set guards = integration_entities('necromancer') | select('match', 'sensor') | list -%}
+  {%- set rank = {'ok': 0, 'snoozed': 0, 'cooldown': 1, 'verify': 2, 'suspect': 3, 'recovering': 4, 'escalated': 5} -%}
+  {%- set ns = namespace(worst='ok', maxr=0, snoozed=0, alarm=false) -%}
+  {%- for e in guards -%}
+    {%- set s = states(e) -%}
+    {%- if s == 'snoozed' -%}{%- set ns.snoozed = ns.snoozed + 1 -%}{%- endif -%}
+    {%- if s == 'escalated' -%}{%- set ns.alarm = true -%}{%- endif -%}
+    {%- set r = rank.get(s, 0) -%}
+    {%- if r > ns.maxr -%}{%- set ns.maxr = r -%}{%- set ns.worst = s -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set display = 'snoozed' if (ns.worst == 'ok' and ns.snoozed > 0) else ns.worst -%}
+  {{ {
+    'ok':         'Alle Systeme nominal',
+    'cooldown':   'Stabilisiert sich',
+    'verify':     'Verifiziere Wiederherstellung',
+    'suspect':    'Verdacht erkannt',
+    'recovering': 'Reparatur läuft',
+    'escalated':  'ALARM eskaliert'
+  }.get(ns.worst, 'Beobachtung') }}
+secondary: |-
+  {%- set guards = integration_entities('necromancer') | select('match', 'sensor') | list -%}
+  {%- set rank = {'ok': 0, 'snoozed': 0, 'cooldown': 1, 'verify': 2, 'suspect': 3, 'recovering': 4, 'escalated': 5} -%}
+  {%- set ns = namespace(worst='ok', maxr=0, snoozed=0, alarm=false) -%}
+  {%- for e in guards -%}
+    {%- set s = states(e) -%}
+    {%- if s == 'snoozed' -%}{%- set ns.snoozed = ns.snoozed + 1 -%}{%- endif -%}
+    {%- if s == 'escalated' -%}{%- set ns.alarm = true -%}{%- endif -%}
+    {%- set r = rank.get(s, 0) -%}
+    {%- if r > ns.maxr -%}{%- set ns.maxr = r -%}{%- set ns.worst = s -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set display = 'snoozed' if (ns.worst == 'ok' and ns.snoozed > 0) else ns.worst -%}
+  {{ (ns.snoozed ~ ' im Wartungsmodus') if ns.snoozed > 0 else '' }}
+icon: |-
+  {%- set guards = integration_entities('necromancer') | select('match', 'sensor') | list -%}
+  {%- set rank = {'ok': 0, 'snoozed': 0, 'cooldown': 1, 'verify': 2, 'suspect': 3, 'recovering': 4, 'escalated': 5} -%}
+  {%- set ns = namespace(worst='ok', maxr=0, snoozed=0, alarm=false) -%}
+  {%- for e in guards -%}
+    {%- set s = states(e) -%}
+    {%- if s == 'snoozed' -%}{%- set ns.snoozed = ns.snoozed + 1 -%}{%- endif -%}
+    {%- if s == 'escalated' -%}{%- set ns.alarm = true -%}{%- endif -%}
+    {%- set r = rank.get(s, 0) -%}
+    {%- if r > ns.maxr -%}{%- set ns.maxr = r -%}{%- set ns.worst = s -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set display = 'snoozed' if (ns.worst == 'ok' and ns.snoozed > 0) else ns.worst -%}
+  {{ {
+    'ok':         'mdi:check-circle',
+    'cooldown':   'mdi:timer-sand',
+    'verify':     'mdi:heart-pulse',
+    'suspect':    'mdi:alert-circle-outline',
+    'recovering': 'mdi:loading',
+    'escalated':  'mdi:alert-octagon',
+    'snoozed':    'mdi:sleep'
+  }.get(display, 'mdi:help') }}
+icon_color: |-
+  {%- set guards = integration_entities('necromancer') | select('match', 'sensor') | list -%}
+  {%- set rank = {'ok': 0, 'snoozed': 0, 'cooldown': 1, 'verify': 2, 'suspect': 3, 'recovering': 4, 'escalated': 5} -%}
+  {%- set ns = namespace(worst='ok', maxr=0, snoozed=0, alarm=false) -%}
+  {%- for e in guards -%}
+    {%- set s = states(e) -%}
+    {%- if s == 'snoozed' -%}{%- set ns.snoozed = ns.snoozed + 1 -%}{%- endif -%}
+    {%- if s == 'escalated' -%}{%- set ns.alarm = true -%}{%- endif -%}
+    {%- set r = rank.get(s, 0) -%}
+    {%- if r > ns.maxr -%}{%- set ns.maxr = r -%}{%- set ns.worst = s -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set display = 'snoozed' if (ns.worst == 'ok' and ns.snoozed > 0) else ns.worst -%}
+  {{ {
+    'ok':         '#4caf50',
+    'cooldown':   '#78909c',
+    'verify':     '#00bcd4',
+    'suspect':    '#ff9800',
+    'recovering': '#2196f3',
+    'escalated':  '#f44336',
+    'snoozed':    '#9c27b0'
+  }.get(display, '#78909c') }}
+multiline_secondary: false
+tap_action:
+  action: navigate
+  navigation_path: '#necro-guards'
+card_mod:
+  style:
+    .: |-
+      {%- set guards = integration_entities('necromancer') | select('match', 'sensor') | list -%}
+      {%- set rank = {'ok': 0, 'snoozed': 0, 'cooldown': 1, 'verify': 2, 'suspect': 3, 'recovering': 4, 'escalated': 5} -%}
+      {%- set ns = namespace(worst='ok', maxr=0, snoozed=0, alarm=false) -%}
+      {%- for e in guards -%}
+        {%- set s = states(e) -%}
+        {%- if s == 'snoozed' -%}{%- set ns.snoozed = ns.snoozed + 1 -%}{%- endif -%}
+        {%- if s == 'escalated' -%}{%- set ns.alarm = true -%}{%- endif -%}
+        {%- set r = rank.get(s, 0) -%}
+        {%- if r > ns.maxr -%}{%- set ns.maxr = r -%}{%- set ns.worst = s -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set display = 'snoozed' if (ns.worst == 'ok' and ns.snoozed > 0) else ns.worst -%}
+      {%- set rgb = {
+        'ok':         '76,175,80',
+        'cooldown':   '120,144,156',
+        'verify':     '0,188,212',
+        'suspect':    '255,152,0',
+        'recovering': '33,150,243',
+        'escalated':  '244,67,54',
+        'snoozed':    '156,39,176'
+      }.get(display, '120,144,156') -%}
+      ha-card {
+        height: 100%;
+        min-height: 110px;
+        border-radius: 20px;
+        padding: 18px 22px;
+        background: linear-gradient(135deg, rgba({{ rgb }},0.30) 0%, rgba({{ rgb }},0.08) 100%);
+        border: 1px solid rgba({{ rgb }},0.65);
+        {% if ns.alarm %}animation: mc-pulse 1.4s ease-in-out infinite;{% endif %}
+      }
+      @keyframes mc-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(244,67,54,0.55); }
+        50%      { box-shadow: 0 0 22px 4px rgba(244,67,54,0.55); }
+      }
+      mushroom-shape-icon { --icon-size: 54px; }
+    mushroom-shape-icon:
+      $: |-
+        .shape {
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        ha-icon { --mdc-icon-size: 50px; }
+    mushroom-state-info:
+      $: |-
+        .primary::before {
+          content: 'NECROMANCER FLEET-STATUS';
+          display: block;
+          font-size: 14px;
+          font-weight: 600;
+          opacity: 0.7;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          margin-bottom: 2px;
+        }
+        .primary {
+          font-size: 26px;
+          font-weight: 700;
+          line-height: 1.15;
+        }
+        .secondary {
+          font-size: 13px;
+          font-weight: 600;
+          color: #9c27b0;
+        }
+grid_options:
+  columns: 12
+  rows: 2
