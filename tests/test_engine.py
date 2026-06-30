@@ -992,6 +992,20 @@ async def test_template_truly_blind(hass, _):
     assert "health_template_missing_entity" not in keys
 
 
+async def test_template_unavailable_input_not_blind(hass, _):
+    # Boot / offline: the template's input EXISTS but reads `unavailable` -> verdict
+    # UNKNOWN, yet it's not a CONFIG problem (the entity is there, just not ready) and
+    # must NOT raise a "blind" repair issue. Regression for the false issues that hit
+    # almost every guard on restart (validation runs at HA-started, before inputs settle).
+    hass.states.async_set("sensor.flaky", "unavailable")
+    health = TemplateHealth(hass, {"template": "{{ states('sensor.flaky') }}"})
+    eng = make(hass, health, StubDriver(hass))
+    assert health.evaluate() == Health.UNKNOWN  # genuinely blind right now …
+    keys = {p["key"] for p in eng.config_problems()}
+    assert "health_template_blind" not in keys  # … but NOT a config problem
+    assert "health_template_missing_entity" not in keys
+
+
 async def test_reconcile_creates_and_clears_config_issue(hass, _):
     # A guard whose health entity doesn't exist -> blind -> a repair issue; once
     # the entity exists, re-reconciling clears it (self-healing on reload).

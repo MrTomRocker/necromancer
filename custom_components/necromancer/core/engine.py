@@ -296,17 +296,20 @@ class DeviceEngine:
                 problems.append(self._problem("health_entity_missing", entity=eid))
             elif _disabled(eid):
                 problems.append(self._problem("health_entity_disabled", entity=eid))
-        # A template subscribes to nothing directly. If its verdict is UNKNOWN the
-        # guard is truly blind; if it still yields a verdict (a default masks a
-        # missing entity) but reads one that's gone, warn — the guard may act on a
-        # value that doesn't reflect the device.
+        # A template subscribes to nothing directly, so validate the entities its
+        # verdict reads. "Blind" is a CONFIG problem only when the verdict is UNKNOWN
+        # *and* every referenced entity is actually gone/disabled (registry-stable);
+        # an UNKNOWN that just means a device is unavailable or not loaded yet is
+        # necromancer's job to recover, not a Repairs issue. A missing entity the
+        # template defaults still yields a verdict -> warn.
         if not self.health.watched_entities:
-            missing = [
-                eid
-                for eid in self.health.referenced_entities()
-                if _missing(eid) or _disabled(eid)
-            ]
-            if self.health.evaluate() == Health.UNKNOWN:
+            referenced = self.health.referenced_entities()
+            missing = [eid for eid in referenced if _missing(eid) or _disabled(eid)]
+            if (
+                referenced
+                and len(missing) == len(referenced)
+                and self.health.evaluate() == Health.UNKNOWN
+            ):
                 problems.append(self._problem("health_template_blind"))
             elif missing:
                 problems.append(

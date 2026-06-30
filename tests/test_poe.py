@@ -20,6 +20,8 @@ from __future__ import annotations
 import asyncio
 import sys
 
+from homeassistant.helpers import entity_registry as er
+
 from tests.common import async_test_home_assistant  # ha-core test helper
 
 from custom_components.necromancer.const import (
@@ -453,6 +455,37 @@ async def test_port_problems_no_id_and_missing_entity(hass, stubs):
     assert ("NOID", "port_entity_missing") in found
     assert ("OK", "port_no_id") not in found
     assert ("OK", "port_entity_missing") not in found
+
+
+async def test_port_problems_registered_but_unloaded_not_missing(hass, stubs):
+    # Boot: the actuator/status entities are REGISTERED (from a prior run) but their
+    # integration hasn't pushed a state yet -> NOT a config problem. Regression for
+    # the false "entity missing" issues that hit almost every port on restart, when
+    # validation runs before the switch/sensor states load (registry is stable, the
+    # state machine is not).
+    reg = er.async_get(hass)
+    act = reg.async_get_or_create("switch", "demo", "poe_act_boot").entity_id
+    status = reg.async_get_or_create("binary_sensor", "demo", "poe_st_boot").entity_id
+    f = PoeFabric(hass)
+    f.set_ports([port("BOOT", act, status, id_static="dev")])
+    assert hass.states.get(act) is None  # not loaded yet …
+    found = {(p["placeholders"]["label"], p["key"]) for p in f.port_problems()}
+    assert ("BOOT", "port_entity_missing") not in found  # … but NOT missing
+    assert ("BOOT", "port_no_id") not in found
+
+
+async def test_port_problems_disabled_entity_is_missing(hass, stubs):
+    # A registered-but-DISABLED actuator can't be driven -> still a config problem.
+    reg = er.async_get(hass)
+    act = reg.async_get_or_create(
+        "switch", "demo", "poe_act_off", disabled_by=er.RegistryEntryDisabler.USER
+    ).entity_id
+    status = reg.async_get_or_create("binary_sensor", "demo", "poe_st_off").entity_id
+    hass.states.async_set(status, "on")
+    f = PoeFabric(hass)
+    f.set_ports([port("OFF", act, status, id_static="dev")])
+    found = {(p["placeholders"]["label"], p["key"]) for p in f.port_problems()}
+    assert ("OFF", "port_entity_missing") in found
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

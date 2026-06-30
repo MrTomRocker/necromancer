@@ -15,6 +15,7 @@ import asyncio
 import logging
 
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import (
@@ -171,9 +172,21 @@ class PoeFabric:
     def port_problems(self) -> list[dict]:
         """User-fixable config problems for the configured ports (repair issues).
 
-        A port with no id source can never match a device; a missing actuator or
-        status entity (no loaded state) means its cycle can't run.
+        A port with no id source can never match a device; a missing or disabled
+        actuator/status entity means its cycle can't run.
         """
+        ent_reg = er.async_get(self.hass)
+
+        def _missing(eid: str) -> bool:
+            # Registry-stable: an entity registered from a prior run is "there" even
+            # before its integration loads a state at boot, so check the registry, not
+            # just the state machine. Truly missing = absent from both; a registered
+            # but disabled entity can't be driven either.
+            entry = ent_reg.async_get(eid)
+            if entry is not None:
+                return entry.disabled
+            return self.hass.states.get(eid) is None
+
         problems: list[dict] = []
         for port in self._ports:
             label = str(port.get(CONF_LABEL, "?"))
@@ -187,7 +200,7 @@ class PoeFabric:
                 )
             for conf in (CONF_ACTUATOR, CONF_STATUS_ENTITY):
                 eid = port.get(conf)
-                if eid and self.hass.states.get(eid) is None:
+                if eid and _missing(eid):
                     problems.append(
                         {
                             "id": f"port_{label}_entity",
