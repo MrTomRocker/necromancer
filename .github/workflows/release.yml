@@ -21,6 +21,6 @@ jobs:
           cd custom_components/necromancer
           zip necromancer.zip -r ./
       - name: Upload zip to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: custom_components/necromancer/necromancer.zip
